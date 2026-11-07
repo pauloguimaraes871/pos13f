@@ -148,4 +148,25 @@ Minimum economically relevant effect: 2% per year gross long-short alpha.
 
 ## Deviations
 
-(none yet)
+Each entry: date, change, reason. Details in `data-raw/spike/G1_report.md`.
+
+- 2026-11-06. Liquidity screen (Plan 1.8) confirmed inside the MVP by the owner, built as
+  a separate step that can be switched off. Reason: defines the sample; must be cuttable.
+- 2026-11-06. Analysis window becomes a pipeline setting (start and end quarter); a short
+  real-data demo window is documented next to the full window. Reason: the brief requires
+  a clean-clone run that shows real 13F data flowing through.
+- 2026-11-06 (D1). Unit check acts on value fields only; it never removes a holding from
+  the counts. Replaces the row and filing quarantine of Plan 1.5. Reason: 12% to 18% of
+  rows filed after 2023-01-03 use the wrong unit; quarantine would create false exits.
+- 2026-11-06 (D2). Implied-price check becomes a point-in-time acceptance condition for a
+  price series (Plan 1.6 had it as a diagnostic). Reason: tickers are reused; the check
+  rejected a wrong company in the spike.
+- 2026-11-06 (D3). All mapped US common stocks are priced, no holder filter. Reason:
+  Tiingo Power limits allow it.
+- 2026-11-06 (D4). Identity coverage about 68% of the 2013 top 1,500, concentrated in
+  dead names: study labelled conditional on observable securities (G1 fail action).
+- 2026-11-06 (D5). Universe stocks with zero cohort holders at q-1 or q are excluded and
+  counted, replacing "holders may be zero in either quarter" in Section 3. Reason: a
+  CUSIP change otherwise creates false initiations and exits (Codex G1-02).
+- 2026-11-06 (D6). Identity is accepted before units are corrected, from the median
+  across filers. Reason: avoids circular checks (Codex G1-03).
