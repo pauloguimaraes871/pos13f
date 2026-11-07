@@ -101,5 +101,46 @@ list(
       bronze_tiingo
       write_window_end(window_end, file.path("data", "manifest", "window_end.txt"))
     }
+  ),
+
+  ## Silver targets name every bronze target they read. A bronze deploy returns its pin
+  ## versions, so a re-pinned bronze table reruns silver; the manifest alone returns a
+  ## constant path and would let silver keep stale data (Codex review, PR #4)
+
+  ## Silver filings: holdings filings with usable_date, relations and trading calendar
+  targets::tar_target(
+    silver_filings,
+    {
+      bronze_manifest
+      bronze_sec
+      bronze_tiingo
+      deploy_silver_filings(init_pipeline_board(board_path), sec_archives_window,
+        verbose = FALSE
+      )
+    }
+  ),
+
+  ## Silver holdings: amendment state machine over every share position, point in time
+  targets::tar_target(
+    silver_holdings,
+    {
+      silver_filings
+      bronze_sec
+      deploy_silver_holdings(init_pipeline_board(board_path), sec_archives_window,
+        verbose = FALSE
+      )
+    }
+  ),
+
+  ## Silver prices: security master, prices, returns, illiquid flags, terminal events
+  ## and the implied-price identity check
+  targets::tar_target(
+    silver_prices,
+    {
+      silver_holdings
+      bronze_openfigi
+      bronze_tiingo
+      deploy_silver_prices(init_pipeline_board(board_path), verbose = FALSE)
+    }
   )
 )

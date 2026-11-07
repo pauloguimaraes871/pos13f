@@ -140,6 +140,32 @@ derived table.
 - Amendments and confidential disclosures enter only from their own `usable_date`;
   they never backfill an earlier formation.
 
+**Why `FILING_DATE` is the information date** (verified 2026-11-07 against SEC
+documents; owner request):
+- A 13F filing is public on EDGAR as soon as it is accepted: SEC's dissemination
+  service sends public submissions to subscribers immediately, usually within two
+  minutes of receipt (EDGAR PDS new-subscriber guide; PDS dissemination specification).
+- Regulation S-T Rule 13(a)(2) (17 CFR 232.13): a submission made after 5:30 pm
+  Eastern is deemed filed the next business day (the 2023 extension to 10 pm, Release
+  33-11159, covers Forms 144, 3, 4 and 5 only, not 13F). A filing is therefore always
+  public by the end of its `FILING_DATE`, at most about one business day earlier.
+  `usable_date` (next trading day) is never early; it is late by a few hours to about
+  one trading day.
+- The bulk Form 13F data sets used here are posted after their filing window closes
+  (the 01jun2026_31aug2026 archive carries Last-Modified 2026-09-14). They contain the
+  filings "as filed", amendments included as separate submissions with their own
+  `FILING_DATE` (SEC Form 13F data sets readme, sections 1 and 3). The bulk files are a
+  structured copy; they add no information that was not public on each filing date.
+- The backtest therefore assumes an investor who reads EDGAR filings as they are
+  accepted, not one who waits for the bulk posting. A filing late against the 45-day
+  deadline enters on its own date, never at the deadline.
+- **Live use**: a real-time version of this pipeline cannot rely on the bulk data sets,
+  which arrive weeks after the filings. It must fetch individual 13F-HR and 13F-HR/A
+  filings from EDGAR as they are accepted (daily index or full-text feed), parse their
+  XML information tables, and switch to the bulk files only to reconcile once a window
+  is posted. Out of scope this weekend; the backtest is unaffected because it dates each
+  filing by `FILING_DATE`.
+
 ### 1.3 Amendment state machine
 
 Per (cik, period_of_report), filings applied in order of (usable_date,
@@ -151,6 +177,26 @@ accession_number):
 - same-day ambiguity: higher accession number wins, logged.
 The state as of t is what the signal reads. Tested with sequences, not single
 amendments (Section 4).
+
+Implemented rules (owner decisions 2026-11-07, `silver_holdings_state`; counts on the
+full window):
+- Amendment without a type (53 of 15,727): ignored and counted; the original stands.
+  Read as a restatement a partial list would erase the original, read as new holdings a
+  full list would double it.
+- `NEW HOLDINGS` repeating a CUSIP already reported: shares and value are summed (the
+  data carry no "additional" flag); `n_sources` = 2 marks the 488,942 summed rows.
+  This supersedes the conflict log above.
+- An original usable after a `NEW HOLDINGS` amendment of the same quarter (468
+  amendments have no earlier original): the original replaces the state, so the earlier
+  added positions are dropped.
+- Same-day filings (1,941 quarters): the higher accession number wins and only the last
+  state of that day is visible. Accession numbers of different filing agents are not
+  chronological, so this is a tie-break, not an ordering by time.
+- A version without positions (empty report) has no rows: the filer reports no share
+  position from its `valid_from`.
+- The quarter comes from `period_of_report` only; `source_archive` is lineage, never a
+  grouping key. A report filed late enters its own quarter from its own `usable_date`.
+- Overlapping reports (Section 1.4) are applied in gold, at cohort construction.
 
 ### 1.4 Manager overlap policy (MVP, conservative and documented)
 
@@ -190,6 +236,32 @@ amendments (Section 4).
 - Missingness reported per quarter by security count, by value, by early/late years
   and by portfolio side. If coverage is poor, the study is labelled as conditional on
   observable securities and no investability claim is made.
+
+Implemented identity (silver, 2026-11-07; shares of 13F holding value, latest version
+of each quarter, all quarters):
+- `silver_security_master` has one row per CUSIP: 17,598 CUSIPs on 17,566 composite
+  FIGIs (32 FIGIs carry two CUSIPs). A CUSIP that OpenFIGI maps to two composite FIGIs
+  (176) is left out entirely: no rule picks the right one.
+- **Snapshot look-ahead.** OpenFIGI and Tiingo are queried once, today. Each FIGI has one
+  ticker, its current or last one (no ticker history), and Tiingo serves a ticker's
+  current owner. A dead company whose ticker was later reused (106 tickers shared by 213
+  instruments, for example ABAT) is therefore unpriceable because of an event after its
+  death; so are instruments whose filed prices disagree with Tiingo (1,588 identity
+  suspects). Excluding them selects the sample with later information, a survivorship
+  effect concentrated in dead firms: 0.34% (shared tickers) plus 0.11% (suspects) of
+  value. Not fixed (a point-in-time ticker history, for example Tiingo's permaTicker,
+  would fix it); reported per quarter and portfolio side with the other missingness.
+- Coverage of 13F value: 71.7% priced; 24.2% not US common stock or not mapped (ETFs,
+  ADRs, funds: out of scope); 3.7% common stock without a Tiingo price source; 0.34%
+  on shared tickers.
+- The implied-price check (`silver_identity_checks`) is stored per CUSIP and quarter
+  from the latest version of each quarter. Gold applies it per quarter as the D2
+  acceptance condition, never the whole-history suspect count (which would itself look
+  ahead). The latest version can include amendments filed after a formation; gold
+  documents this or recomputes from the versions usable at t.
+- Adjusted prices are total-return series: on 99.9% of dividend and split days the
+  adjusted return equals (close + dividend) / (previous close / split factor) - 1,
+  checked by the silver prices suite.
 
 ### 1.7 Portfolio accounting and costs (MVP)
 
