@@ -62,12 +62,34 @@ save_local_pin <- function(board, data, stage, table, inputs = list(), extra = l
     if (is.double(x)) format(x, scientific = FALSE, digits = 15, trim = TRUE) else x
   })
   ## pins skips the write (and keeps the current version) when the content hash is
-  ## unchanged, so reruns of an unchanged layer do not duplicate data on disk
+  ## unchanged, so reruns of an unchanged layer do not duplicate data on disk. When the
+  ## content is identical but was built from different input versions, a new version
+  ## is forced so the lineage stays true (Codex B04).
+  old_meta <- if (name %in% pins::pin_list(board)) pins::pin_meta(board, name)$user
+  old_inputs <- old_meta$inputs
+  new_lineage <- !identical(unname(unlist(old_inputs)), unname(unlist(inputs))) ||
+    !identical(names(unlist(old_inputs)), names(unlist(inputs)))
+  ## The same holds for the extra metadata: a record such as the sample window must not
+  ## be lost because the content happens to be unchanged
+  new_extra <- length(extra) > 0 &&
+    !identical(old_meta[names(extra)], metadata[names(extra)])
+  new_version <- new_lineage || new_extra
+  ## pins::pin_upload() stores a new version on every call, so for files the same rule
+  ## is applied here: an MD5 fingerprint of the files is kept in the metadata, and
+  ## identical files with the same inputs and extra metadata return the current version
+  if (!is.data.frame(data)) {
+    metadata$content_md5 <- paste(sort(paste(basename(data), tools::md5sum(data))),
+      collapse = ";"
+    )
+    if (!new_version && identical(old_meta$content_md5, metadata$content_md5)) {
+      return(pins::pin_meta(board, name)$local$version)
+    }
+  }
   write <- function() {
     if (is.data.frame(data)) {
       pins::pin_write(board, data, name,
         type = "parquet", metadata = metadata,
-        versioned = TRUE
+        versioned = TRUE, force_identical_write = new_version
       )
     } else {
       pins::pin_upload(board, data, name, metadata = metadata, versioned = TRUE)

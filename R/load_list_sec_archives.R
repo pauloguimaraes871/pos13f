@@ -22,7 +22,7 @@ list_sec_archives <- function(user_agent = Sys.getenv("SEC_USER_AGENT"), verbose
     httr2::request(url) |>
       httr2::req_user_agent(user_agent) |>
       httr2::req_throttle(rate = 5, realm = "sec.gov") |>
-      httr2::req_retry(max_tries = 3)
+      httr2::req_retry(max_tries = 3, retry_on_failure = TRUE)
   }
 
   # Parse the page, then ask each file's size
