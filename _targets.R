@@ -101,5 +101,16 @@ list(
       bronze_tiingo
       write_window_end(window_end, file.path("data", "manifest", "window_end.txt"))
     }
+  ),
+
+  ## Silver filings: holdings filings with usable_date, relations and trading calendar
+  targets::tar_target(
+    silver_filings,
+    {
+      bronze_manifest
+      deploy_silver_filings(init_pipeline_board(board_path), sec_archives_window,
+        verbose = FALSE
+      )
+    }
   )
 )

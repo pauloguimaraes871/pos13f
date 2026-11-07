@@ -105,6 +105,22 @@ test_that("identical content built from new inputs gets a new version (Codex B04
   expect_equal(meta$inputs, list(bronze_sec_2014q1 = "v2"))
 })
 
+test_that("the same inputs listed in another order create no new version", {
+  ## silver read the bronze pins alphabetically, then in archive order (2026-11-07)
+  board <- init_pipeline_board(withr::local_tempdir())
+  inputs <- list(bronze_sec_2014q1 = "v1", bronze_sec_01jun2026_31aug2026 = "v7")
+  save_local_pin(board, holdings_fixture(), "silver", "holdings",
+    inputs = inputs, verbose = FALSE
+  )
+  Sys.sleep(1.1)
+
+  save_local_pin(board, holdings_fixture(), "silver", "holdings",
+    inputs = rev(inputs), verbose = FALSE
+  )
+
+  expect_equal(nrow(pins::pin_versions(board, "silver_holdings")), 1L)
+})
+
 test_that("uploading identical files with the same inputs creates no new version", {
   ## pins::pin_upload() always stores a version; a rerun of an unchanged layer must not
   board <- init_pipeline_board(withr::local_tempdir())

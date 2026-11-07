@@ -66,9 +66,14 @@ save_local_pin <- function(board, data, stage, table, inputs = list(), extra = l
   ## content is identical but was built from different input versions, a new version
   ## is forced so the lineage stays true (Codex B04).
   old_meta <- if (name %in% pins::pin_list(board)) pins::pin_meta(board, name)$user
-  old_inputs <- old_meta$inputs
-  new_lineage <- !identical(unname(unlist(old_inputs)), unname(unlist(inputs))) ||
-    !identical(names(unlist(old_inputs)), names(unlist(inputs)))
+  ## Compared as name-version pairs in name order: the same inputs listed in another
+  ## order are the same lineage
+  by_name <- function(x) {
+    x <- unlist(x)
+    ## Source pins have no inputs: unlist() gives NULL on both sides
+    if (is.null(x)) x else x[order(names(x))]
+  }
+  new_lineage <- !identical(by_name(old_meta$inputs), by_name(inputs))
   ## The same holds for the extra metadata: a record such as the sample window must not
   ## be lost because the content happens to be unchanged
   new_extra <- length(extra) > 0 &&
