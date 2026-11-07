@@ -1,0 +1,300 @@
+# 13F positioning factor: implementation plan (v0.2)
+
+v0.2 integrates the Codex plan review (15 findings; resolution log in Section 8).
+Clock: hard stop **Mon 08:00**. Companion: `factor_memo_draft.md` v0.2
+(hypothesis, definitions, decision rules). This plan covers how and when.
+
+## 0. Principles
+
+- **CP4 is a submission, not an analysis milestone.** By Sunday 12:30 the repo holds
+  a complete, compliant deliverable: real 13F data through F1, one portfolio rule,
+  a benchmark, costs, diagnostics, a self-contained HTML report, a 3-page memo, and a
+  verified fresh-clone run. Everything after CP4 improves a submission that already
+  exists.
+- One hypothesis (F1), one weighting method (`cs`) in the MVP. F2 to F5, F3 skill
+  ranking, Fama-MacBeth, XBRL market cap and capacity claims are **deferred**, listed
+  in the memo as considered and not tested.
+- Fail early on the data dependencies that can kill the project (identity, delisting,
+  resources): they are tested Friday, before full ingestion.
+- Every checkpoint ends with tests green, `targets` pipeline run, a commit.
+
+---
+
+## 1. Architecture
+
+R package (working name `pos13f`, owner to confirm) plus `targets` pipeline.
+
+```
+R/                    one function per file (see CLAUDE.md code style)
+tests/testthat/       one test file per function, realistic fixtures
+inst/extdata/fixture/ tiny offline fixture (fabricated 13F rows + recorded API replies)
+_targets.R            full pipeline; tar_option for a "fixture" profile
+inst/report/report.qmd  self-contained HTML (embed-resources: true)
+memo/memo.qmd         3 to 5 page memo
+docs/                 plan, memo draft, deviations
+CLAUDE.md, AGENTS.md, README.md, .Renviron.example
+```
+
+Storage: raw zips streamed **one archive at a time** into a `duckdb` file on disk
+(`memory_limit` about 3 GB, `threads` 2, temp directory on the data disk). R only
+ever holds aggregated tables. Secrets from environment variables only.
+
+### 1.1 Keys and table contracts
+
+**Internal instrument key: `instrument_id` = OpenFIGI composite FIGI.** Used in every
+table after the security master. Tickers are retrieval attributes stored in a dated
+alias table; they are never join keys. Accession provenance is kept through every
+derived table.
+
+| Table | Key | Main columns |
+|---|---|---|
+| `filings` | accession_number | cik, period_of_report, filing_date, usable_date, submission_type, report_type, amendment_type, amendment_no, value_regime (thousands, dollars) |
+| `filing_relations` | accession_number, related_cik, relation | relation in (reports_for_me: OTHERMANAGER, included_in_report: OTHERMANAGER2) |
+| `holdings_state` | cik, period_of_report, cusip, valid_from, valid_to | shares, value_usd, value_raw, value_multiplier, row_status, source_accessions |
+| `security_master` | cusip | instrument_id (composite FIGI), share_class_figi, security_type, exch_code, map_status, evidence (implied-price check result) |
+| `ticker_alias` | instrument_id, ticker, first_date, last_date | source (OpenFIGI, Tiingo meta) |
+| `prices_d` | instrument_id, date | close_unadj, adj_close, volume, split_factor, div_cash |
+| `terminal_events` | instrument_id | last_price_date, terminal_policy, stress_return |
+| `filer_activity` | cik, formation_date | n_positions, position_turnover, activity_flag (computed from data usable at formation only) |
+| `signal` | instrument_id, formation_date | n_holders_prev, n_holders_curr, breadth_change, cohort_size, report_quarters |
+| `weights` | instrument_id, formation_date | side, target_weight |
+| `bt_returns_m` | month_end | long, short, long_short_gross, turnover, cost_scenario, net |
+
+### 1.2 Timing contract (single source of truth)
+
+- `usable_date` = first trading day after `FILING_DATE` (the data set has no time
+  stamp).
+- **Formation date t** = last trading day of Feb, May, Aug, Nov.
+- **Signal at t** compares two **common consecutive report quarters** (q-1, q): q is
+  the quarter whose deadline fell in the formation month (Q4 for end-Feb, Q1 for
+  end-May, Q2 for end-Aug, Q3 for end-Nov). A filer enters the cohort only if both
+  its q-1 and q reports (with any amendments) have `usable_date` <= t.
+- Screens and weights use prices and volumes up to t-1. Execution at close of t.
+  Portfolio returns start at t+1.
+- Amendments and confidential disclosures enter only from their own `usable_date`;
+  they never backfill an earlier formation.
+
+### 1.3 Amendment state machine
+
+Per (cik, period_of_report), filings applied in order of (usable_date,
+accession_number):
+- original 13F-HR: sets the state;
+- `RESTATEMENT`: replaces the whole state;
+- `NEW HOLDINGS`: appends rows (a CUSIP already present is summed only if the
+  amendment is flagged as additional; otherwise logged as a conflict);
+- same-day ambiguity: higher accession number wins, logged.
+The state as of t is what the signal reads. Tested with sequences, not single
+amendments (Section 4).
+
+### 1.4 Manager overlap policy (MVP, conservative and documented)
+
+- Counting unit: the filing CIK. A stock counts at most once per CIK per quarter
+  (rows summed over discretion and other-manager splits within an accession).
+- Notice reports (13F-NT) carry no holdings and are dropped.
+- If a CIK is listed in another filer's `OTHERMANAGER2` (included in that report)
+  **and** files its own holdings report for the same quarter, the pair is flagged as
+  overlapping; MVP rule: keep the larger report, drop the other from the cohort for
+  that quarter. The count and value affected are reported; a sensitivity drops both.
+
+### 1.5 Value units
+
+- Regime set by **filing date** (submission on or after 2023-01-03: dollars; before:
+  thousands), not by report quarter or archive label. An old-quarter amendment filed
+  after the change is in the dollar regime.
+- Keep `value_raw`, `value_multiplier`, `row_status`.
+- Validation: implied price (value / shares) vs. Tiingo unadjusted close at period
+  end. Rows with ratio near 1000 or 0.001 are quarantined individually; a filing is
+  quarantined only if more than 50% of its matched rows fail. Counts reported.
+- F1 itself uses holder **counts**, so a residual unit error cannot move the signal;
+  units matter for activity measures, validation and diagnostics.
+
+### 1.6 Identity and delisting policy
+
+- CUSIP to `instrument_id` through OpenFIGI v3 (`POST /v3/mapping`, `ID_CUSIP`,
+  header `X-OPENFIGI-APIKEY`, 100 jobs per request, 250 requests per minute,
+  `includeUnlistedEquities: true` or delisted names are not returned).
+- Different CUSIPs are treated as the same instrument **only** if OpenFIGI returns the
+  same composite FIGI. No other chaining. A CUSIP change creating a new instrument is
+  an identity break: that stock leaves the signal for that formation (flagged, counted).
+- The implied-price check is a diagnostic stored as evidence, not proof of identity.
+- **Terminal returns**: Tiingo gives no delisting return. Baseline: the position is
+  closed at the last available price (return 0 afterwards). Stress: -30% applied on
+  the last day to every unexplained termination (Shumway 1997 [mem] order of
+  magnitude). Both reported, by portfolio side.
+- Missingness reported per quarter by security count, by value, by early/late years
+  and by portfolio side. If coverage is poor, the study is labelled as conditional on
+  observable securities and no investability claim is made.
+
+### 1.7 Portfolio accounting and costs (MVP)
+
+- Dollar-neutral long-short: long leg +1, short leg -1 of capital (gross 2).
+  Returns are excess long-short returns; financing ignored and stated.
+- Legs: top and bottom quintile of F1 within the liquid universe; ties broken by
+  `instrument_id`; a leg with fewer than 20 names makes that formation empty (flat).
+- Weights: `cs` (signal score x trailing liquidity score, normalised per leg).
+- **Weights drift** (buy and hold) between quarterly trades; trades and turnover occur
+  only at formation dates.
+- Costs: scenario-based, one-way cost per dollar traded of 10, 25 and 50 bps, applied
+  to each side traded; plus break-even cost. Borrow fee sensitivity: 0 and 100 bps per
+  year on the short leg, reported separately from trading costs.
+- Benchmarks: same-universe equal weight (long-only comparison) and SPY total return
+  (broad market), plus FF5 + UMD for alpha. Cap-weighted benchmark deferred.
+
+### 1.8 Universe (MVP)
+
+At each formation, from data up to t-1: US common stock with a valid
+`instrument_id`; price >= USD 5; at least 12 months of price history; trailing
+63-day median dollar volume in the top 1000. Described as "liquid US equities", not
+large/mid cap.
+
+### 1.9 Filer activity proxy (not a Bushee replication)
+
+Per formation, from reports usable at t only: `n_positions` and price-free
+`position_turnover` (share of positions initiated or exited between q-1 and q, a
+count measure). A filer is **excluded as index-like** if it is in the top tercile of
+`n_positions` **and** the bottom tercile of `position_turnover` in that quarter's
+cross-section. Terciles are recomputed per quarter (no full-sample cut-offs); one
+flag per filer per formation applies to both endpoints of that change. Filers with
+fewer than 10 positions are excluded.
+
+---
+
+## 2. Schedule
+
+Assumes Phase 0 starts Fri 19:30 at home. Times are targets; meals and sleep are in.
+
+| Window | Phase | Output | CP |
+|---|---|---|---|
+| Fri 19:30 to 21:00 | 0 Setup | repo, skeleton, style files, keys checked, CI-free `devtools::check()` passes | |
+| Fri 21:00 to 00:30 | 1 Feasibility spike | gate report (Section 3) | **G1** |
+| Sat 08:00 to 13:00 | 2 Ingestion and cleaning | `filings`, `filing_relations`, `holdings_state` full window | **CP1** |
+| Sat 14:00 to 18:00 | 3 Identity, prices, terminal events | `security_master`, `ticker_alias`, `prices_d`, `terminal_events`, coverage report | **CP2** |
+| Sat 19:00 to 21:00 | 4 Activity proxy and universe | `filer_activity`, universe per formation | **CP3** |
+| Sat 21:00 to 01:00 | 5 F1, `cs`, backtest, costs, evaluation, past-return double sort | results tables | |
+| Sun 08:30 to 12:30 | 6 HTML report, 3-page memo, README, fresh-clone run | tag `v0.1-submission` | **CP4** |
+| Sun 12:30 to 13:30 | Codex code review of the PR (runs while lunch) | findings | |
+| Sun 13:30 to 18:30 | 7 Extensions, in order (Section 5) | improved results | **CP5** |
+| Sun 18:30 to 21:30 | 8 Accepted findings, final memo, fresh-clone run | tag `v1.0` | **CP6** |
+| Sun 21:30 to Mon 08:00 | Buffer and sleep; Mon 06:30 final check and submit | | |
+
+Lateness triggers are per checkpoint, not a blanket 1.5 h:
+- **G1** fails or is not done by Sat 01:00: apply the G1 fail actions before sleeping.
+- **CP1** not reached by Sat 14:00: shorten the window (Section 6, step 4).
+- **CP2** not reached by Sat 19:00: accept the coverage as is, label the study
+  conditional, move on.
+- **CP4** not reached by Sun 14:00: stop all extensions; finish CP4 only.
+
+---
+
+## 3. Phase 1 feasibility spike (decision gate G1)
+
+Throwaway script, not package code. Measurements:
+
+1. **Archives**: one early (2014Q1) and one recent (2025) zip, plus the archive
+   containing January 2023. Record compressed and expanded size, load wall time,
+   peak R memory, duckdb file size and temp spill. Extrapolate the full run and one
+   retry.
+2. **Unit transition**: verify implied-price ratios cluster near 1 under the filing-date
+   regime rule, including at least one old-quarter amendment filed after 2023-01-03.
+3. **Identity chain on a stratified sample of about 60 CUSIPs**: current large caps,
+   acquired companies, bankruptcies, ticker changes, dual share classes, a CUSIP
+   change. For each: OpenFIGI result, composite FIGI, Tiingo series found, series
+   start and end, terminal observation, implied-price check.
+4. **Tiingo meta**: what the ticker metadata returns for delisted names (dates,
+   alternative identifiers).
+
+Pass / fail actions (fixed now):
+- Full run estimated above 6 h wall time or above 60 GB disk: start the window at
+  2016Q1 (logged deviation).
+- Identity chain success below 80% by count in the stratified sample, or failures
+  concentrated in delisted names: continue, label the study conditional on observable
+  securities, add a missingness-by-side table to the memo. Do **not** buy or
+  integrate a new reference source this weekend.
+- Peak memory above 5 GB: reduce duckdb threads to 1 and process one quarter at a
+  time; if still above, move to GitHub Codespaces (setup tested only if needed).
+
+---
+
+## 4. Testing (proportionate)
+
+- Unit tests per function; realistic unbalanced fixtures ordered by id.
+- **Mandatory scenario fixtures**:
+  - F1 cohort: one initiation, one complete exit, one unchanged position, one CUSIP
+    change with the same composite FIGI, one CUSIP change with a new FIGI, one filer
+    missing quarter q, one filer whose q report is usable after t.
+  - Amendment sequences: original then new-holdings then restatement; two
+    new-holdings; restatement then new-holdings; same-day amendments; an old-quarter
+    amendment filed after 2023-01-03.
+  - Overlap: a combination report including a manager that also files alone.
+  - Confidential position revealed by amendment after t (must not enter at t).
+- Invariants: no filing with `usable_date` > t enters a signal at t; legs sum to +1
+  and -1; no trades between formation dates; returns start at t+1.
+- One end-to-end run on the offline fixture (`targets` fixture profile), no network.
+- Network functions tested against recorded responses.
+
+---
+
+## 5. Extensions after CP4 (strict order, stop when time runs out)
+
+1. `rp` weighting (second construction method).
+2. HAC lag sensitivity (3 and 6 months) and leave-one-period-out stability.
+3. Square-root (Barra-type) impact model with explicit units: order in USD, ADV in
+   USD per day, daily volatility as a fraction, coefficient stated; participation rates
+   at USD 100M.
+4. Disclosure-lagged performance profile: F1 portfolio returns in months 1 to 12
+   after formation (a diagnostic of decay, not F2).
+5. Activity-proxy split (high vs. low turnover filers).
+
+Not this weekend: F2 to F5, F3 skill ranking, Fama-MacBeth, XBRL market cap,
+cap-weighted benchmark, USD 1B capacity, free-tier reproduction mode.
+
+---
+
+## 6. Simplification ladder (pre-agreed cuts, in order)
+
+1. Drop all Section 5 extensions.
+2. Replace the activity proxy by "exclude filers above the 90th percentile of
+   n_positions" (stated as a cruder proxy).
+3. Drop the overlap sensitivity; keep the MVP overlap rule.
+4. Shorten the window to 2016Q1 onward.
+5. Drop the past-return double sort (then the memo cannot conclude "supported"; it
+   reports the result as unconditional evidence only).
+
+Never cut: timing contract, amendment state machine, unit regime rule, identity and
+terminal policy with missingness reporting, cost scenarios, HTML report, memo,
+fresh-clone run.
+
+---
+
+## 7. Reproduction contract (README)
+
+Full reproduction requires: R and packages via `renv::restore()`; `SEC_USER_AGENT`;
+a Tiingo key on a paid plan (Power); an OpenFIGI key (free); about N GB disk and
+about H hours on first run (N and H measured in G1). Functional verification without
+keys or network: `targets` fixture profile, under a minute. Fresh-clone test is run
+twice: at CP4 and at CP6.
+
+---
+
+## 8. Codex review resolution log (v0.1 to v0.2)
+
+| # | Finding | Decision | Where |
+|---|---|---|---|
+| 1 | CP4 is not a submission | Accepted: CP4 now includes report, memo, fresh clone; `rp`, USD 1B and impact model moved after CP4; double sort kept in CP4 | 0, 2, 5 |
+| 2 | Identity and delisting unproved | Accepted: Friday chain audit, composite-FIGI-only chaining, terminal policy with stress, missingness by side | 1.6, 3 |
+| 3 | Intersection rule censors F1 | Accepted: matched filer cohort, union of eligible securities, identity breaks handled separately | 1.2, memo F1 |
+| 4 | Leakage paths | Accepted: common consecutive quarters, both usable at t, per-quarter activity terciles, t-1 screens, F3 deferred | 1.2, 1.9 |
+| 5 | Overlap and amendment state | Accepted with modification: both relation tables kept; simple keep-larger rule plus sensitivity instead of entity resolution | 1.3, 1.4 |
+| 6 | No slack | Accepted: optional work cut, per-checkpoint triggers, CP4 moved to Sun 12:30 | 2, 6 |
+| 7 | Weak gate | Accepted: expanded spike with resource measurement and fixed actions | 3 |
+| 8 | Classifier unspecified | Accepted: renamed activity proxy, fully specified, price-free turnover, per-quarter | 1.9 |
+| 9 | Unit regime | Accepted: filing-date regime, raw value kept, row-level quarantine | 1.5 |
+| 10 | Accounting and costs undefined | Accepted: dollar-neutral convention, drift, scenario costs, borrow sensitivity; impact model after CP4 | 1.7, 5 |
+| 11 | Universe and benchmark conflict | Accepted: liquidity screen in MVP (owner to confirm), EW universe and SPY benchmarks | 1.7, 1.8 |
+| 12 | Decision rule | Accepted: interval-based rules, quarterly formation counts, HAC sensitivity | memo 8 |
+| 13 | Extensions test other hypotheses | Accepted: F1 claim narrowed, F2 to F4 deferred | memo 3 |
+| 14 | Contracts contradict key policy | Accepted: `instrument_id` everywhere, ticker alias table, accession provenance | 1.1 |
+| 15 | Free-tier mode | Accepted: dropped; reproduction contract plus offline fixture | 7 |
+
+Open owner decisions: package name; liquidity screen inside the MVP (reverses the
+earlier "screening after MVP" call; needed to define the sample).

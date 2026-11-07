@@ -1,0 +1,6 @@
+linters: lintr::linters_with_defaults(
+    line_length_linter = lintr::line_length_linter(100L),
+    object_name_linter = lintr::object_name_linter(styles = "snake_case"),
+    indentation_linter = lintr::indentation_linter(2L)
+  )
+encoding: "UTF-8"

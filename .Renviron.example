@@ -1,0 +1,15 @@
+# Copy these lines into your user-level .Renviron (open it with
+# usethis::edit_r_environ()), replace the placeholders, then restart R.
+# Never commit real values: .Renviron is git-ignored.
+
+# SEC EDGAR requires a descriptive User-Agent with a name and contact email.
+# See https://www.sec.gov/os/accessing-edgar-data (limit: 10 requests per second).
+SEC_USER_AGENT="Your Name your.email@example.com"
+
+# Tiingo API token, paid plan (Power) for full daily price history.
+# Get it at https://www.tiingo.com/account/api/token
+TIINGO_API_KEY="replace-with-your-tiingo-token"
+
+# OpenFIGI API key (free); raises limits to 250 requests per minute and
+# 100 jobs per request. Get it at https://www.openfigi.com/api
+OPENFIGI_API_KEY="replace-with-your-openfigi-key"

@@ -1,0 +1,40 @@
+Package: pos13f
+Title: Institutional Positioning Factors from SEC Form 13F Filings
+Version: 0.0.0.9000
+Authors@R: 
+    person("Paulo", "Guimarães", , "pauloguimaraes871@gmail.com", role = c("aut", "cre"))
+Description: Ingests the SEC Form 13F data sets, builds a point-in-time
+    institutional breadth-change factor and backtests it on liquid US
+    equities with explicit trading costs.
+License: MIT + file LICENSE
+Config/roxygen2/version: 8.1.1
+Encoding: UTF-8
+Language: en-US
+Roxygen: list(markdown = TRUE)
+Suggests: 
+    frenchdata,
+    ggplot2,
+    knitr,
+    lmtest,
+    quarto,
+    sandwich,
+    tarchetypes,
+    targets,
+    testthat (>= 3.0.0),
+    withr
+Config/testthat/edition: 3
+Imports: 
+    arrow,
+    DBI,
+    dbplyr,
+    dplyr (>= 1.1.0),
+    duckdb,
+    httr2,
+    jsonlite,
+    lubridate,
+    purrr,
+    readr,
+    rlang,
+    stringr,
+    tibble,
+    tidyr

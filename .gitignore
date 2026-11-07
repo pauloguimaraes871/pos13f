@@ -1,0 +1,18 @@
+.Rproj.user
+.Rproj.user/
+.Rhistory
+.RData
+
+# Secrets: keys live only in the user-level .Renviron
+.Renviron
+
+# Data cache and pipeline store (tens of GB, rebuilt by the pipeline)
+data-raw/cache/*
+!data-raw/cache/.gitkeep
+_targets/
+*.parquet
+*.duckdb
+*.duckdb.wal
+
+# Rendered report: rebuilt by targets; the submission copy is force-added at CP4
+inst/report/*.html
