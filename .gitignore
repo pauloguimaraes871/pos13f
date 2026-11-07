@@ -12,6 +12,9 @@
 data-raw/cache/*
 !data-raw/cache/.gitkeep
 _targets/
+# Versioned pins board (all layers) and data-quality logs, rebuilt by the pipeline
+data/
+logs/
 *.parquet
 *.duckdb
 *.duckdb.wal

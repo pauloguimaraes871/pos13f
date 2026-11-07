@@ -26,8 +26,10 @@ dir.create(tmp_dir, recursive = TRUE, showWarnings = FALSE)
 ## Refuse to run on an existing database instead of deleting it: a rerun would otherwise
 ## load every archive twice. To rebuild, delete spike.duckdb by hand first.
 if (file.exists(db_path)) {
-  stop("data-raw/cache/spike/spike.duckdb already exists. Delete it by hand to rebuild ",
-       "it; otherwise every archive would be loaded twice.")
+  stop(
+    "data-raw/cache/spike/spike.duckdb already exists. Delete it by hand to rebuild ",
+    "it; otherwise every archive would be loaded twice."
+  )
 }
 con <- DBI::dbConnect(duckdb::duckdb(shared_home = FALSE), dbdir = db_path)
 
@@ -41,8 +43,10 @@ DBI::dbExecute(con, "SET threads = 2")
 DBI::dbExecute(con, sprintf("SET temp_directory = '%s'", normalizePath(tmp_dir, "/")))
 
 ## The six tables we load (SIGNATURE is not needed by any part of the plan)
-tables <- c("SUBMISSION", "COVERPAGE", "SUMMARYPAGE", "OTHERMANAGER", "OTHERMANAGER2",
-            "INFOTABLE")
+tables <- c(
+  "SUBMISSION", "COVERPAGE", "SUMMARYPAGE", "OTHERMANAGER", "OTHERMANAGER2",
+  "INFOTABLE"
+)
 
 ## Peak memory of this R process so far, in MB. duckdb runs inside the R process, so this
 ## number covers both R and duckdb.
@@ -94,8 +98,10 @@ load_archive <- function(zip_file) {
 }
 
 # Run the three loads and save the measurements
-sample_files <- c("2014q1_form13f.zip", "2023q1_form13f.zip",
-                  "01mar2025-31may2025_form13f.zip")
+sample_files <- c(
+  "2014q1_form13f.zip", "2023q1_form13f.zip",
+  "01mar2025-31may2025_form13f.zip"
+)
 loads <- purrr::map(sample_files, load_archive) |> purrr::list_rbind()
 print(loads, width = Inf)
 readr::write_csv(loads, file.path(cache_dir, "spike", "load_measurements.csv"))

@@ -14,8 +14,10 @@ if (!nzchar(sec_ua)) stop("SEC_USER_AGENT is not set; see .Renviron.example.")
 cache_dir <- "data-raw/cache/sec"
 dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
 archives <- readr::read_csv("data-raw/cache/spike/archives.csv", show_col_types = FALSE)
-sample_files <- c("2014q1_form13f.zip", "2023q1_form13f.zip",
-                  "01mar2025-31may2025_form13f.zip")
+sample_files <- c(
+  "2014q1_form13f.zip", "2023q1_form13f.zip",
+  "01mar2025-31may2025_form13f.zip"
+)
 
 # Download one archive
 ## Skipped when the file is already on disk with the size the server announced, so the
