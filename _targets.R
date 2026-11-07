@@ -123,5 +123,15 @@ list(
         verbose = FALSE
       )
     }
+  ),
+
+  ## Silver prices: security master, prices, returns, illiquid flags, terminal events
+  ## and the implied-price identity check
+  targets::tar_target(
+    silver_prices,
+    {
+      silver_holdings
+      deploy_silver_prices(init_pipeline_board(board_path), verbose = FALSE)
+    }
   )
 )

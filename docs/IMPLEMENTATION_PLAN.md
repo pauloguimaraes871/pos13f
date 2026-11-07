@@ -237,6 +237,32 @@ full window):
   and by portfolio side. If coverage is poor, the study is labelled as conditional on
   observable securities and no investability claim is made.
 
+Implemented identity (silver, 2026-11-07; shares of 13F holding value, latest version
+of each quarter, all quarters):
+- `silver_security_master` has one row per CUSIP: 17,598 CUSIPs on 17,566 composite
+  FIGIs (32 FIGIs carry two CUSIPs). A CUSIP that OpenFIGI maps to two composite FIGIs
+  (176) is left out entirely: no rule picks the right one.
+- **Snapshot look-ahead.** OpenFIGI and Tiingo are queried once, today. Each FIGI has one
+  ticker, its current or last one (no ticker history), and Tiingo serves a ticker's
+  current owner. A dead company whose ticker was later reused (106 tickers shared by 213
+  instruments, for example ABAT) is therefore unpriceable because of an event after its
+  death; so are instruments whose filed prices disagree with Tiingo (1,588 identity
+  suspects). Excluding them selects the sample with later information, a survivorship
+  effect concentrated in dead firms: 0.34% (shared tickers) plus 0.11% (suspects) of
+  value. Not fixed (a point-in-time ticker history, for example Tiingo's permaTicker,
+  would fix it); reported per quarter and portfolio side with the other missingness.
+- Coverage of 13F value: 71.7% priced; 24.2% not US common stock or not mapped (ETFs,
+  ADRs, funds: out of scope); 3.7% common stock without a Tiingo price source; 0.34%
+  on shared tickers.
+- The implied-price check (`silver_identity_checks`) is stored per CUSIP and quarter
+  from the latest version of each quarter. Gold applies it per quarter as the D2
+  acceptance condition, never the whole-history suspect count (which would itself look
+  ahead). The latest version can include amendments filed after a formation; gold
+  documents this or recomputes from the versions usable at t.
+- Adjusted prices are total-return series: on 99.9% of dividend and split days the
+  adjusted return equals (close + dividend) / (previous close / split factor) - 1,
+  checked by the silver prices suite.
+
 ### 1.7 Portfolio accounting and costs (MVP)
 
 - Dollar-neutral long-short: long leg +1, short leg -1 of capital (gross 2).

@@ -38,15 +38,8 @@ deploy_silver_holdings <- function(board, archives, log_path = file.path("logs",
   sources <- build_holdings_sources(events)
 
   # Positions and state, inside duckdb
-  con <- DBI::dbConnect(duckdb::duckdb(shared_home = FALSE))
+  con <- open_duckdb_work(memory_limit, temp_dir)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
-  settings <- c(
-    paste0("SET memory_limit = '", memory_limit, "'"), "SET threads = 2",
-    paste0("SET temp_directory = '", normalizePath(temp_dir, winslash = "/"), "'"),
-    "SET preserve_insertion_order = false"
-  )
-  purrr::walk(settings, function(s) DBI::dbExecute(con, s))
   work_dir <- tempfile("holdings_", tmpdir = temp_dir)
   dir.create(work_dir)
   on.exit(unlink(work_dir, recursive = TRUE), add = TRUE)

@@ -185,3 +185,14 @@ Each entry: date, change, reason. Details in `data-raw/spike/G1_report.md`.
   CUSIP change otherwise creates false initiations and exits (Codex G1-02).
 - 2026-11-06 (D6). Identity is accepted before units are corrected, from the median
   across filers. Reason: avoids circular checks (Codex G1-03).
+- 2026-11-07 (D7). Identity uses a snapshot of OpenFIGI and Tiingo taken on the download
+  date, not a point-in-time ticker history. Instruments whose ticker was later reused, or
+  whose filed prices disagree with Tiingo, cannot be priced: 0.45% of 13F holding value,
+  mostly dead firms. This is a survivorship effect from later information; it is
+  reported by quarter and portfolio side, not corrected. Reason: no ticker history in the
+  free data; the implied-price check shows 99.96% agreement on liquid, well-held stocks,
+  so a permaTicker download was judged not worth it (owner, 2026-11-07).
+- 2026-11-07 (D8). The implied-price check counts the filers whose value per share lies
+  within 0.5 to 2 times Tiingo's raw close and accepts when most do, instead of the
+  median of D6. Reason: same intent, and counts stream over 77 million rows where a
+  median ran out of memory.
