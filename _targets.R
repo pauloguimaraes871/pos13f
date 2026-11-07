@@ -17,7 +17,9 @@
 # window_end are ingested. window_end is set here by the user, never inferred from the
 # archives on SEC: moving it to a new batch (SEC posts three-month filing windows, Dec to
 # Feb, Mar to May, Jun to Aug, Sep to Nov) requires redownloading every Tiingo price,
-# because adjusted prices are restated (deploy_bronze_tiingo(force = TRUE)).
+# because adjusted prices are restated: the pipeline stops until the user deletes the
+# cached price files (data-raw/cache/tiingo/t_*.parquet). The manifest
+# (data/manifest/window_end.txt) records the window once the bronze layer concludes.
 # Demo profile: POS13F_WINDOW_START=2024-01-01 in .Renviron runs a short sample.
 
 # Load package code ----
@@ -32,9 +34,6 @@ targets::tar_option_set(packages = character(0), imports = "pos13f")
 ingest_from <- as.Date(Sys.getenv("POS13F_WINDOW_START", "2013-01-01"))
 ## Last day of the latest SEC batch in the sample (archive 01jun2026-31aug2026)
 window_end <- as.Date("2026-08-31")
-## TRUE only when window_end moves to a new batch: redownloads all prices (about 2 h).
-## Set it back to FALSE after that run, or every later Tiingo rebuild redownloads again
-tiingo_force <- FALSE
 
 # Targets ----
 list(
@@ -56,9 +55,12 @@ list(
   ),
   targets::tar_target(
     sec_archives_window,
+    ## !! rather than .env$: targets does not see globals behind .env$, so a new window
+    ## would not rerun this filter (Codex review). tar_target() injects !! values into
+    ## the command, and a changed command reruns the target
     dplyr::filter(
-      sec_archives, .data$window_start >= .env$ingest_from,
-      .data$window_end <= .env$window_end
+      sec_archives, .data$window_start >= !!ingest_from,
+      .data$window_end <= !!window_end
     )
   ),
 
@@ -86,8 +88,18 @@ list(
     {
       bronze_openfigi
       deploy_bronze_tiingo(init_pipeline_board(board_path),
-        window_end = window_end, force = tiingo_force, verbose = FALSE
+        window_end = window_end, verbose = FALSE
       )
+    }
+  ),
+
+  ## Manifest: the window of the concluded bronze layer, written only after every bronze
+  ## deploy has passed its suite
+  targets::tar_target(
+    bronze_manifest,
+    {
+      bronze_tiingo
+      write_window_end(window_end, file.path("data", "manifest", "window_end.txt"))
     }
   )
 )

@@ -8,6 +8,7 @@ setup_tiingo <- function(env = parent.frame()) {
   ), "bronze", "openfigi", verbose = FALSE)
   list(
     board = board, cache_dir = withr::local_tempdir(.local_envir = env),
+    manifest_dir = withr::local_tempdir(.local_envir = env),
     log_path = withr::local_tempdir(.local_envir = env)
   )
 }
@@ -35,13 +36,15 @@ mock_tiingo <- function(env = parent.frame()) {
   calls
 }
 
-deploy <- function(s, window_end = as.Date("2026-08-31"), ...) {
+deploy <- function(s, window_end = as.Date("2026-08-31"), min_spy_rows = 2) {
   suppressMessages(deploy_bronze_tiingo(s$board,
-    window_end = window_end,
-    cache_dir = s$cache_dir, api_key = "k", log_path = s$log_path,
-    min_found_share = 0.5, min_spy_rows = 2, verbose = FALSE, ...
+    window_end = window_end, cache_dir = s$cache_dir, manifest_dir = s$manifest_dir,
+    api_key = "k", log_path = s$log_path,
+    min_found_share = 0.5, min_spy_rows = min_spy_rows, verbose = FALSE
   ))
 }
+
+cached_prices <- function(s) list.files(s$cache_dir, pattern = "^t_.*\\.parquet$")
 
 test_that("deploy_bronze_tiingo pins prices for common stocks and SPY with lineage", {
   s <- setup_tiingo()
@@ -74,14 +77,7 @@ test_that("deploy_bronze_tiingo stops and pins nothing when the suite fails", {
   s <- setup_tiingo()
   mock_tiingo()
 
-  expect_error(
-    suppressMessages(deploy_bronze_tiingo(s$board,
-      window_end = as.Date("2026-08-31"),
-      cache_dir = s$cache_dir, api_key = "k", log_path = s$log_path,
-      min_found_share = 0.5, min_spy_rows = 1000, verbose = FALSE
-    )),
-    "Tests failed"
-  )
+  expect_error(deploy(s, min_spy_rows = 1000), "Tests failed")
   expect_false("bronze_tiingo_prices" %in% pins::pin_list(s$board))
 })
 
@@ -90,16 +86,28 @@ test_that("deploy_bronze_tiingo records the window and stops on a later one", {
   s <- setup_tiingo()
   calls <- mock_tiingo()
   deploy(s)
+  expect_equal(read_window_end(file.path(s$cache_dir, "window_end.txt")), as.Date("2026-08-31"))
   expect_equal(
     pins::pin_meta(s$board, "bronze_tiingo_prices")$user$window_end, "2026-08-31"
   )
   first_calls <- calls$n
 
-  expect_error(deploy(s, window_end = as.Date("2026-11-30")), "force = TRUE")
+  expect_error(deploy(s, window_end = as.Date("2026-11-30")), "Delete")
   expect_equal(calls$n, first_calls)
 })
 
-test_that("deploy_bronze_tiingo with force = TRUE redownloads every ticker", {
+test_that("deploy_bronze_tiingo dates a cache whose first build failed", {
+  ## Codex review: a failed first build leaves prices but no pin; a later window must
+  ## still stop instead of mixing those prices with fresh ones
+  s <- setup_tiingo()
+  mock_tiingo()
+  expect_error(deploy(s, min_spy_rows = 1000), "Tests failed")
+  expect_gt(length(cached_prices(s)), 0)
+
+  expect_error(deploy(s, window_end = as.Date("2026-11-30")), "later")
+})
+
+test_that("deploy_bronze_tiingo redownloads every ticker once the cache is deleted", {
   s <- setup_tiingo()
   calls <- mock_tiingo()
   deploy(s)
@@ -107,11 +115,24 @@ test_that("deploy_bronze_tiingo with force = TRUE redownloads every ticker", {
   ## pins names versions by the second: identical content needs a new second
   Sys.sleep(1.1)
 
-  deploy(s, window_end = as.Date("2026-11-30"), force = TRUE)
+  unlink(file.path(s$cache_dir, cached_prices(s)))
+  deploy(s, window_end = as.Date("2026-11-30"))
 
-  ## Every ticker requested again, and the new window recorded
+  ## Every ticker requested again, and the new window recorded in the cache and the pin
   expect_equal(calls$n, 2 * first_calls)
+  expect_equal(read_window_end(file.path(s$cache_dir, "window_end.txt")), as.Date("2026-11-30"))
   expect_equal(
     pins::pin_meta(s$board, "bronze_tiingo_prices")$user$window_end, "2026-11-30"
   )
+})
+
+test_that("deploy_bronze_tiingo dates an unrecorded cache from the manifest", {
+  ## The cache of the first full download predates its own window record
+  s <- setup_tiingo()
+  mock_tiingo()
+  deploy(s)
+  unlink(file.path(s$cache_dir, "window_end.txt"))
+  write_window_end(as.Date("2026-05-31"), file.path(s$manifest_dir, "window_end.txt"))
+
+  expect_error(deploy(s), "later")
 })

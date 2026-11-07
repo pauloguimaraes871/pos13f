@@ -7,10 +7,11 @@
 #'
 #' @param board A `pins_board` from [init_pipeline_board()].
 #' @param window_end Date scalar, last day of the SEC filing window of this run, set by
-#'   the user in `_targets.R`; recorded in the pin metadata.
-#' @param force Logical scalar; `TRUE` deletes the cache and redownloads every ticker.
-#'   Required when `window_end` is later than the one recorded in the current pin.
-#' @param cache_dir Character scalar, folder with one parquet file per ticker.
+#'   the user in `_targets.R`; recorded in the cache folder and the pin metadata.
+#' @param cache_dir Character scalar, folder with one parquet file per ticker and the
+#'   `window_end.txt` record of the window they were downloaded for.
+#' @param manifest_dir Character scalar, folder of the pipeline manifest, whose
+#'   `window_end.txt` records the window of the last concluded bronze layer.
 #' @param start_date Character scalar, first date requested (`YYYY-MM-DD`).
 #' @param api_key Character scalar, Tiingo API key.
 #' @param log_path Character scalar, folder for the data-quality log.
@@ -29,11 +30,14 @@
 #' The cache is never extended: prices of live tickers end at their download date, and
 #' Tiingo restates adjusted prices after splits and dividends, so new dates cannot be
 #' appended to old ones. A new SEC batch (a later `window_end`) therefore stops the
-#' deploy until it is rerun with `force = TRUE`, which redownloads everything
-#' (`check_tiingo_window()`).
+#' deploy until the user deletes the cached price files, which redownloads everything.
+#' The cache records its window before the first download, so an interrupted download
+#' is dated too; a cache filled before that record existed takes the window from the
+#' manifest (`check_tiingo_window()`).
 #' @export
-deploy_bronze_tiingo <- function(board, window_end, force = FALSE,
+deploy_bronze_tiingo <- function(board, window_end,
                                  cache_dir = file.path("data-raw", "cache", "tiingo"),
+                                 manifest_dir = file.path("data", "manifest"),
                                  start_date = "2013-01-01",
                                  api_key = Sys.getenv("TIINGO_API_KEY"),
                                  log_path = file.path("logs", "tests"),
@@ -42,14 +46,15 @@ deploy_bronze_tiingo <- function(board, window_end, force = FALSE,
   # Validate inputs
   if (!inherits(board, "pins_board")) stop("board must be a pins board (init_pipeline_board()).")
 
-  # Reuse or refresh the cache, given the window it was pinned for
-  previous_end <- if ("bronze_tiingo_prices" %in% pins::pin_list(board)) {
-    pins::pin_meta(board, "bronze_tiingo_prices")$user$window_end
-  }
-  if (!is.null(previous_end)) previous_end <- as.Date(previous_end)
-  if (check_tiingo_window(window_end, previous_end, force) == "refresh") {
-    unlink(list.files(cache_dir, pattern = "^t_.*\\.parquet$", full.names = TRUE))
-  }
+  # Reuse the cache only for prices of one vintage
+  cache_record <- file.path(cache_dir, "window_end.txt")
+  cache_window <- check_tiingo_window(window_end,
+    n_cached = length(list.files(cache_dir, pattern = "^t_.*\\.parquet$")),
+    cache_end = read_window_end(cache_record),
+    manifest_end = read_window_end(file.path(manifest_dir, "window_end.txt"))
+  )
+  ## Recorded before the first download, so an interrupted run still knows its window
+  write_window_end(cache_window, cache_record)
 
   # Tickers to request, and those not yet cached
   replies <- pins::pin_read(board, "bronze_openfigi")

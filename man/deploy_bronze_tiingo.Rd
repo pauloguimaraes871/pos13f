@@ -7,8 +7,8 @@
 deploy_bronze_tiingo(
   board,
   window_end,
-  force = FALSE,
   cache_dir = file.path("data-raw", "cache", "tiingo"),
+  manifest_dir = file.path("data", "manifest"),
   start_date = "2013-01-01",
   api_key = Sys.getenv("TIINGO_API_KEY"),
   log_path = file.path("logs", "tests"),
@@ -22,12 +22,13 @@ deploy_bronze_tiingo(
 \item{board}{A \code{pins_board} from \code{\link[=init_pipeline_board]{init_pipeline_board()}}.}
 
 \item{window_end}{Date scalar, last day of the SEC filing window of this run, set by
-the user in \verb{_targets.R}; recorded in the pin metadata.}
+the user in \verb{_targets.R}; recorded in the cache folder and the pin metadata.}
 
-\item{force}{Logical scalar; \code{TRUE} deletes the cache and redownloads every ticker.
-Required when \code{window_end} is later than the one recorded in the current pin.}
+\item{cache_dir}{Character scalar, folder with one parquet file per ticker and the
+\code{window_end.txt} record of the window they were downloaded for.}
 
-\item{cache_dir}{Character scalar, folder with one parquet file per ticker.}
+\item{manifest_dir}{Character scalar, folder of the pipeline manifest, whose
+\code{window_end.txt} records the window of the last concluded bronze layer.}
 
 \item{start_date}{Character scalar, first date requested (\code{YYYY-MM-DD}).}
 
@@ -58,6 +59,8 @@ combines the files and computes the checks, so the full table never enters R.
 The cache is never extended: prices of live tickers end at their download date, and
 Tiingo restates adjusted prices after splits and dividends, so new dates cannot be
 appended to old ones. A new SEC batch (a later \code{window_end}) therefore stops the
-deploy until it is rerun with \code{force = TRUE}, which redownloads everything
-(\code{check_tiingo_window()}).
+deploy until the user deletes the cached price files, which redownloads everything.
+The cache records its window before the first download, so an interrupted download
+is dated too; a cache filled before that record existed takes the window from the
+manifest (\code{check_tiingo_window()}).
 }

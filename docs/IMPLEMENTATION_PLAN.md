@@ -89,10 +89,13 @@ non-positive adjusted close before computing returns, then applies the liquidity
 New SEC batch (owner decision 2026-11-07): `window_end` is set by the user in `_targets.R`
 (2026-08-31, the last archive), never inferred. Tiingo restates adjusted prices after
 splits and dividends, so the price cache cannot be extended with new dates.
-`deploy_bronze_tiingo()` records `window_end` in the pin metadata and stops when a run's
-`window_end` is later than the recorded one; `force = TRUE` deletes the cache and
-redownloads every ticker (about two hours). Later, the check moves to a pipeline
-manifest that records the metadata of every target, as in `pipeline`.
+The Tiingo cache records its `window_end` before its first download, and the manifest
+(`data/manifest/window_end.txt`) records it when the bronze layer concludes.
+`deploy_bronze_tiingo()` stops when a run's `window_end` is later than the cache's
+window (the manifest's, for a cache that predates its own record). Redownloading is
+started only by the user, by deleting the cached price files (about two hours); there is
+no force argument (owner decision 2026-11-07, after Codex review). Later, the manifest
+grows to record the metadata of every target, as in `pipeline`.
 
 Compute: `duckdb` runs **in memory** inside a deploy, reading the parquet files of the
 input pins (`read_parquet()` on the paths returned by `pins::pin_download()`), with
