@@ -4,7 +4,15 @@
 \alias{run_test_silver_filings}
 \title{Data-quality suite for the silver filings and their relations}
 \usage{
-run_test_silver_filings(filings, relations, calendar, n_expected, archives)
+run_test_silver_filings(
+  filings,
+  relations,
+  calendar,
+  n_expected,
+  archives,
+  max_quarter_change = 0.25,
+  min_quarter_filings = 1000
+)
 }
 \arguments{
 \item{filings}{Tibble from \code{build_silver_filings()}.}
@@ -19,6 +27,12 @@ bronze; silver must keep every one of them.}
 \item{archives}{Data frame of the SEC archives read, from \code{\link[=list_sec_archives]{list_sec_archives()}}:
 \code{label}, \code{window_start} and \code{window_end} (Date, the filing-date window of the
 archive).}
+
+\item{max_quarter_change}{Numeric scalar, largest relative change allowed in the
+number of original reports from one report quarter to the next.}
+
+\item{min_quarter_filings}{Numeric scalar, the continuity check only compares
+quarters with at least this many original reports (small samples are noisy).}
 }
 \value{
 \code{invisible(TRUE)} when every check passes.
@@ -36,4 +50,10 @@ with no trading day in between.
 \code{filing_date} itself is confirmed by two independent sources: SEC placed the filing
 in the archive whose filing window contains that date, and the accession number
 (\verb{<submitter CIK>-<YY>-<sequence>}) carries the same year.
+
+Coverage continuity catches a missing or truncated archive, which no row-level check
+sees: original reports per quarter grew smoothly from 3,453 (2013Q2) to 8,908
+(2025Q4), with the largest step +14\% (Q4 2021, year-end registrations). Only
+quarters whose filing deadline (quarter end plus 45 days) lies inside the sample's
+filing dates are compared.
 }

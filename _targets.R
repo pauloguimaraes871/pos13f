@@ -112,5 +112,16 @@ list(
         verbose = FALSE
       )
     }
+  ),
+
+  ## Silver holdings: amendment state machine over every share position, point in time
+  targets::tar_target(
+    silver_holdings,
+    {
+      silver_filings
+      deploy_silver_holdings(init_pipeline_board(board_path), sec_archives_window,
+        verbose = FALSE
+      )
+    }
   )
 )

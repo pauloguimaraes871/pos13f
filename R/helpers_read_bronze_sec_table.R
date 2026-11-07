@@ -21,30 +21,14 @@ read_bronze_sec_table <- function(board, table, labels) {
   if (!is.character(table) || length(table) != 1 || !table %in% allowed) {
     stop("table must be one of: ", paste(allowed, collapse = ", "), ".")
   }
-  if (!is.character(labels) || length(labels) == 0 || anyNA(labels) || anyDuplicated(labels)) {
-    stop("labels must be a non-empty character vector of distinct archive labels.")
-  }
-  pins_sec <- paste0("bronze_sec_", labels)
-  ## An archive of the window without a pin would silently shrink the sample
-  missing_pins <- setdiff(pins_sec, pins::pin_list(board))
-  if (length(missing_pins) > 0) {
-    stop(
-      "The board has no pin for: ", paste(missing_pins, collapse = ", "),
-      ". Run deploy_bronze() on the same window first."
-    )
-  }
 
-  # Read the current version of each archive
-  out <- purrr::map(pins_sec, function(p) {
-    files <- pins::pin_download(board, p)
-    nanoparquet::read_parquet(files[basename(files) == paste0(table, ".parquet")]) |>
+  # Read the current version of each archive (labels are checked by the lister)
+  paths <- list_bronze_sec_files(board, table, labels)
+  out <- purrr::imap(paths, function(path, label) {
+    nanoparquet::read_parquet(path) |>
       tibble::as_tibble() |>
-      dplyr::mutate(source_archive = sub("^bronze_sec_", "", p))
+      dplyr::mutate(source_archive = label)
   }) |>
     purrr::list_rbind()
-  inputs <- stats::setNames(
-    purrr::map(pins_sec, function(p) pins::pin_meta(board, p)$local$version),
-    pins_sec
-  )
-  structure(out, inputs = inputs)
+  structure(out, inputs = attr(paths, "inputs"))
 }

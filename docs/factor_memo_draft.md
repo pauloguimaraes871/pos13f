@@ -105,6 +105,15 @@ Binding definitions are in Plan 1.2 to 1.6: usable date, common consecutive
 quarters, both reports public at t, amendment state machine, overlap policy,
 filing-date unit regime, composite-FIGI identity, terminal-return baseline and stress.
 
+Information date [src]: each 13F filing is public on EDGAR within minutes of acceptance
+(EDGAR PDS guide), and a submission after 5:30 pm Eastern is dated the next business
+day (17 CFR 232.13(a)(2)), so a filing is public by the end of its `FILING_DATE`. The
+SEC bulk data sets, posted after each window closes, hold filings "as filed" with
+amendments as separate submissions (Form 13F data sets readme). Positions are used
+from the next trading day: conservative by at most about one trading day, never early.
+A live implementation would have to read EDGAR filings directly, since the bulk files
+arrive weeks later.
+
 ## 7. Backtest design
 
 - Quarterly formation (end of Feb, May, Aug, Nov), execution at close of t, returns
@@ -144,7 +153,13 @@ Minimum economically relevant effect: 2% per year gross long-short alpha.
 - Gompers & Metrick (2001, QJE), "Institutional investors and equity prices": the
   supplied ssrn-278920 is Gompers, Ishii & Metrick (2003), a different paper.
 - Bushee (1998, 2001); Miller (1977); Nagel (2005); Shumway (1997) delisting
-  returns; Agarwal, Jiang, Tang & Yang (2013) confidential holdings.
+  returns; Agarwal, Jiang, Tang & Yang (2013) confidential holdings (citation and
+  abstract verified 2026-11-07: JF 68(2), 739 to 783; findings not yet read in the
+  article).
+- Brown & Schwarz (2013, NYU working paper), "Do Market Participants Care about
+  Portfolio Disclosure? Evidence from Hedge Funds' 13F Filings": existence verified;
+  the finding of a market reaction at the filing date is unverified and must not be
+  cited until read.
 
 ## Deviations
 

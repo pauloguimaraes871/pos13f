@@ -12,6 +12,10 @@
 #' @param archives Data frame of the SEC archives read, from [list_sec_archives()]:
 #'   `label`, `window_start` and `window_end` (Date, the filing-date window of the
 #'   archive).
+#' @param max_quarter_change Numeric scalar, largest relative change allowed in the
+#'   number of original reports from one report quarter to the next.
+#' @param min_quarter_filings Numeric scalar, the continuity check only compares
+#'   quarters with at least this many original reports (small samples are noisy).
 #'
 #' @return `invisible(TRUE)` when every check passes.
 #'
@@ -23,8 +27,47 @@
 #' `filing_date` itself is confirmed by two independent sources: SEC placed the filing
 #' in the archive whose filing window contains that date, and the accession number
 #' (`<submitter CIK>-<YY>-<sequence>`) carries the same year.
+#'
+#' Coverage continuity catches a missing or truncated archive, which no row-level check
+#' sees: original reports per quarter grew smoothly from 3,453 (2013Q2) to 8,908
+#' (2025Q4), with the largest step +14% (Q4 2021, year-end registrations). Only
+#' quarters whose filing deadline (quarter end plus 45 days) lies inside the sample's
+#' filing dates are compared.
 #' @export
-run_test_silver_filings <- function(filings, relations, calendar, n_expected, archives) {
+run_test_silver_filings <- function(filings, relations, calendar, n_expected, archives,
+                                    max_quarter_change = 0.25, min_quarter_filings = 1000) {
+  testthat::test_that("the trading calendar is increasing weekdays with full years", {
+    testthat::expect_false(is.unsorted(calendar, strictly = TRUE))
+    testthat::expect_false(any(lubridate::wday(calendar, week_start = 1) > 5))
+    ## A full year has 250 to 253 NYSE sessions; fewer means missing SPY days
+    years <- table(lubridate::year(calendar))
+    full_years <- names(years)[
+      as.Date(paste0(names(years), "-01-07")) >= min(calendar) &
+        as.Date(paste0(names(years), "-12-24")) <= max(calendar)
+    ]
+    testthat::expect_true(all(years[full_years] >= 248 & years[full_years] <= 254))
+  })
+
+  testthat::test_that("original reports per quarter change smoothly (no lost archive)", {
+    per_quarter <- filings |>
+      dplyr::filter(
+        !.data$is_amendment,
+        .data$period_of_report + 45 >= min(.data$filing_date),
+        .data$period_of_report + 45 <= max(.data$filing_date)
+      ) |>
+      dplyr::count(.data$period_of_report) |>
+      dplyr::filter(.data$n >= min_quarter_filings) |>
+      dplyr::mutate(
+        change = .data$n / dplyr::lag(.data$n) - 1,
+        ## A quarter with no report at all would vanish from the count: check the step
+        quarter_index = lubridate::year(.data$period_of_report) * 4 +
+          lubridate::quarter(.data$period_of_report),
+        step = .data$quarter_index - dplyr::lag(.data$quarter_index)
+      )
+    testthat::expect_true(all(abs(per_quarter$change) <= max_quarter_change, na.rm = TRUE))
+    testthat::expect_true(all(per_quarter$step == 1, na.rm = TRUE))
+  })
+
   testthat::test_that("every bronze holdings filing appears exactly once", {
     testthat::expect_equal(nrow(filings), n_expected)
     testthat::expect_false(anyDuplicated(filings$accession_number) > 0)

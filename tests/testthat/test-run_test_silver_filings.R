@@ -85,3 +85,30 @@ test_that("the suite fails on a relation of a filing not in silver", {
   )
   expect_false(silver_suite_passes(silver_filings_fixture(), relations = relations))
 })
+
+test_that("the suite passes on the toy sample of real filings", {
+  ## Real noise: odd CIKs, missing summary pages, late reports, same-day amendments
+  toy <- toy_bronze_sec()
+  filings <- toy_silver_filings(toy)
+  relations <- build_silver_filing_relations(toy$OTHERMANAGER, toy$OTHERMANAGER2, filings)
+  n_expected <- sum(toy$SUBMISSION$SUBMISSIONTYPE %in% c("13F-HR", "13F-HR/A"))
+  ok <- suppressMessages(run_logged_test(
+    function() run_test_silver_filings(filings, relations, toy$calendar, n_expected, toy$archives),
+    log_file = "test_silver_filings", log_path = withr::local_tempdir()
+  ))
+  expect_true(ok)
+})
+
+test_that("the suite fails on a weekend day in the trading calendar", {
+  relations <- build_silver_filing_relations(silver_othermanager(), silver_othermanager2(),
+    filings = silver_filings_fixture()
+  )
+  calendar <- sort(c(silver_calendar, as.Date("2022-11-19")))
+  ok <- suppressMessages(run_logged_test(
+    function() {
+      run_test_silver_filings(silver_filings_fixture(), relations, calendar, 3, silver_archives)
+    },
+    log_file = "test_silver_filings", log_path = withr::local_tempdir()
+  ))
+  expect_false(ok)
+})
