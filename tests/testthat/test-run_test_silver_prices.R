@@ -3,7 +3,8 @@ good_checks <- function() {
   tibble::tibble(
     n_prices = 1000, n_duplicate_ids = 0, n_nonpositive = 0, n_off_calendar = 0,
     n_tickers_multi = 0, n_returns = 990, n_liquidity = 1000, n_missing_flags = 0,
-    share_big_liquid = 1e-4, share_total_return_agree = 0.999, aapl_split_ret = 0.0339, n_terminal = 10, n_instruments = 10,
+    share_big_liquid = 1e-4, share_total_return_agree = 0.999, aapl_split_ret = 0.0339,
+    n_terminal = 10, n_instruments = 10,
     n_after_calendar = 0, share_match_liquid = 0.999
   )
 }

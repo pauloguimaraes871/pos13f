@@ -46,6 +46,15 @@ test_that("the suite fails on duplicated or lost state rows", {
   expect_false(holdings_suite_passes(checks = checks_fixture(state[-1, ])))
 })
 
+test_that("the suite fails when a filing lost its whole information table", {
+  ## One of twelve filings has no bronze row left: its count is missing, not small
+  checks <- checks_fixture()
+  checks$entry_counts <- dplyr::filter(
+    checks$entry_counts, .data$accession_number != "0000000202-23-000002"
+  )
+  expect_false(holdings_suite_passes(checks = checks))
+})
+
 test_that("the suite fails when bronze row counts disagree with many summary pages", {
   filings <- dplyr::mutate(holdings_filings_fixture(), table_entry_total = 50)
   expect_false(holdings_suite_passes(filings = filings))

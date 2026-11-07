@@ -68,11 +68,14 @@ run_test_silver_holdings <- function(events, sources, filings, checks,
   })
 
   testthat::test_that("bronze row counts match the summary page for nearly all filings", {
+    ## Left join: a filing whose information table vanished entirely has no count, and
+    ## must count as 0 rows, not drop out of the denominator (Codex review, PR #4)
     compared <- filings |>
       dplyr::filter(.data$table_entry_total > 0) |>
-      dplyr::inner_join(checks$entry_counts,
+      dplyr::left_join(checks$entry_counts,
         by = dplyr::join_by("accession_number"), relationship = "one-to-one"
-      )
+      ) |>
+      dplyr::mutate(n_infotable_rows = dplyr::coalesce(.data$n_infotable_rows, 0L))
     off <- abs(compared$n_infotable_rows - compared$table_entry_total) >
       0.05 * compared$table_entry_total
     testthat::expect_lte(mean(off), max_entry_mismatch)
