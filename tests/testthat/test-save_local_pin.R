@@ -88,6 +88,56 @@ test_that("identical content creates no new version; changed content adds one", 
   )
 })
 
+test_that("identical content built from new inputs gets a new version (Codex B04)", {
+  ## Otherwise the pin would claim to come from inputs it was not built from
+  board <- init_pipeline_board(withr::local_tempdir())
+  save_local_pin(board, holdings_fixture(), "silver", "holdings",
+    inputs = list(bronze_sec_2014q1 = "v1"), verbose = FALSE
+  )
+  Sys.sleep(1.1)
+
+  save_local_pin(board, holdings_fixture(), "silver", "holdings",
+    inputs = list(bronze_sec_2014q1 = "v2"), verbose = FALSE
+  )
+
+  expect_equal(nrow(pins::pin_versions(board, "silver_holdings")), 2L)
+  meta <- pins::pin_meta(board, "silver_holdings")$user
+  expect_equal(meta$inputs, list(bronze_sec_2014q1 = "v2"))
+})
+
+test_that("uploading identical files with the same inputs creates no new version", {
+  ## pins::pin_upload() always stores a version; a rerun of an unchanged layer must not
+  board <- init_pipeline_board(withr::local_tempdir())
+  file <- file.path(withr::local_tempdir(), "PRICES.parquet")
+  nanoparquet::write_parquet(holdings_fixture(), file)
+  first <- save_local_pin(board, file, "bronze", "prices", verbose = FALSE)
+
+  again <- save_local_pin(board, file, "bronze", "prices", verbose = FALSE)
+
+  expect_equal(again, first)
+  expect_equal(nrow(pins::pin_versions(board, "bronze_prices")), 1L)
+})
+
+test_that("identical content with new extra metadata gets a new version", {
+  ## The Tiingo pin of 2026-11-07 had to gain its window_end without new content
+  board <- init_pipeline_board(withr::local_tempdir())
+  file <- file.path(withr::local_tempdir(), "PRICES.parquet")
+  nanoparquet::write_parquet(holdings_fixture(), file)
+  save_local_pin(board, file, "bronze", "prices", verbose = FALSE)
+  Sys.sleep(1.1)
+
+  save_local_pin(board, file, "bronze", "prices",
+    extra = list(window_end = "2026-08-31"), verbose = FALSE
+  )
+  save_local_pin(board, file, "bronze", "prices",
+    extra = list(window_end = "2026-08-31"), verbose = FALSE
+  )
+
+  expect_equal(nrow(pins::pin_versions(board, "bronze_prices")), 2L)
+  meta <- pins::pin_meta(board, "bronze_prices")$user
+  expect_equal(meta$window_end, "2026-08-31")
+})
+
 test_that("save_local_pin uploads parquet files without reading them into R", {
   board <- init_pipeline_board(withr::local_tempdir())
   file <- file.path(withr::local_tempdir(), "SUBMISSION.parquet")

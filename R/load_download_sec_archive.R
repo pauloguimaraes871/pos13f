@@ -52,7 +52,7 @@ download_sec_archive <- function(url, dest_dir, user_agent = Sys.getenv("SEC_USE
   resp <- httr2::request(url) |>
     httr2::req_user_agent(user_agent) |>
     httr2::req_throttle(rate = 5, realm = "sec.gov") |>
-    httr2::req_retry(max_tries = 3) |>
+    httr2::req_retry(max_tries = 3, retry_on_failure = TRUE) |>
     httr2::req_perform()
   writeBin(httr2::resp_body_raw(resp), tmp)
   ## A short transfer is rejected here, before it can be mistaken for the archive

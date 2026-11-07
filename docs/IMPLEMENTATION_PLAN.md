@@ -70,12 +70,32 @@ change adds a version folder, older versions stay (time travel with
 records the exact versions of the pins it was built from (lineage, the per-pin
 equivalent of `pipeline`'s manifest).
 
-Open item for silver (Codex review B04, deferred 2026-11-07): `pins::pin_write()` skips
-a write when the content is identical even if the input versions changed, which would
-leave stale lineage on a data-frame pin. Before silver pins its first data frame,
-`save_local_pin()` must write a new version when `inputs` differ from the current pin's.
-Bronze is unaffected (file pins via `pin_upload()`, skipped upstream by
-`deploy_bronze()`).
+Lineage on identical content (Codex review B04, resolved 2026-11-07): `pins::pin_write()`
+skips a write when the content is identical; `save_local_pin()` forces a new version
+when the input versions differ from the current pin's, so lineage stays true.
+
+Price universe (owner decision 2026-11-07): Tiingo prices are requested for US listings
+whose OpenFIGI `securityType` is `Common Stock`, plus SPY. REITs, ADRs and ETFs are out
+of scope, matching the CRSP share codes 10 and 11 behind the Fama-French factors.
+Foreign-incorporated common stocks (CINS identifiers) can be excluded in gold.
+
+Data-quality gradient (owner decision 2026-11-07): bronze keeps vendor data as delivered
+and tolerates small known defects, counted in the pin metadata; silver applies the strict
+checks after filtering. First case: Tiingo `adj_close` of 0 with a positive `close`
+(9,680 of 28.0 million rows, 13 OTC tickers; the adjustment rounds tiny prices to 0).
+`run_test_bronze_tiingo()` allows at most 0.1% such rows; silver drops rows with a
+non-positive adjusted close before computing returns, then applies the liquidity screen.
+
+New SEC batch (owner decision 2026-11-07): `window_end` is set by the user in `_targets.R`
+(2026-08-31, the last archive), never inferred. Tiingo restates adjusted prices after
+splits and dividends, so the price cache cannot be extended with new dates.
+The Tiingo cache records its `window_end` before its first download, and the manifest
+(`data/manifest/window_end.txt`) records it when the bronze layer concludes.
+`deploy_bronze_tiingo()` stops when a run's `window_end` is later than the cache's
+window (the manifest's, for a cache that predates its own record). Redownloading is
+started only by the user, by deleting the cached price files (about two hours); there is
+no force argument (owner decision 2026-11-07, after Codex review). Later, the manifest
+grows to record the metadata of every target, as in `pipeline`.
 
 Compute: `duckdb` runs **in memory** inside a deploy, reading the parquet files of the
 input pins (`read_parquet()` on the paths returned by `pins::pin_download()`), with
