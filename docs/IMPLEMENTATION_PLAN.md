@@ -1,6 +1,9 @@
-# 13F positioning factor: implementation plan (v0.2)
+# 13F positioning factor: implementation plan (v0.3)
 
-v0.2 integrates the Codex plan review (15 findings; resolution log in Section 8).
+v0.3 (2026-11-07) adopts the owner's medallion layout (bronze, silver, gold, backtests,
+reports), versioned `pins` storage and prefixed file names (Section 1). v0.2 integrated
+the Codex plan review (15 findings; resolution log in Section 8). G1 decisions D1 to D6
+are in `data-raw/spike/G1_report.md` and override Sections 1.5 and 1.6 where they differ.
 Clock: hard stop **Mon 08:00**. Companion: `factor_memo_draft.md` v0.2
 (hypothesis, definitions, decision rules). This plan covers how and when.
 
@@ -22,22 +25,65 @@ Clock: hard stop **Mon 08:00**. Companion: `factor_memo_draft.md` v0.2
 
 ## 1. Architecture
 
-R package (working name `pos13f`, owner to confirm) plus `targets` pipeline.
+R package `pos13f` plus `targets` pipeline, organised like the owner's `pipeline`
+repository: a medallion of deploy layers, each one tested before it is pinned.
 
 ```
-R/                    one function per file (see CLAUDE.md code style)
-tests/testthat/       one test file per function, realistic fixtures
-inst/extdata/fixture/ tiny offline fixture (fabricated 13F rows + recorded API replies)
-_targets.R            full pipeline; tar_option for a "fixture" profile
+R/                      one function per file, file name = <group>_<function_name>.R
+  setup_*               board initialisation
+  load_*                downloads and readers of external sources (SEC, OpenFIGI, Tiingo)
+  helpers_*             small reusable steps (pins, logging, transformations)
+  tests_*               run_test_<layer>(): data-quality suites run inside deploys
+  deploy_*              deploy_bronze(), deploy_silver(), deploy_gold(),
+                        deploy_backtests(), deploy_reports()
+  report_*              report helpers
+tests/testthat/         unit tests, one file per function, realistic fixtures (TDD)
+inst/extdata/fixture/   tiny offline fixture (fabricated 13F rows, recorded API replies)
+_targets.R              full pipeline; window setting gives the demo profile
 inst/report/report.qmd  self-contained HTML (embed-resources: true)
-memo/memo.qmd         3 to 5 page memo
-docs/                 plan, memo draft, deviations
-CLAUDE.md, AGENTS.md, README.md, .Renviron.example
+memo/memo.qmd           3 to 5 page memo
+docs/                   plan, memo draft, brief
 ```
 
-Storage: raw zips streamed **one archive at a time** into a `duckdb` file on disk
-(`memory_limit` about 3 GB, `threads` 2, temp directory on the data disk). R only
-ever holds aggregated tables. Secrets from environment variables only.
+R packages cannot use sub-folders of `R/`, so the file-name prefix plays the role of
+`pipeline`'s folders.
+
+### 1.0 Medallion layers, storage and versioning
+
+| Layer | Deploy | Contents |
+|---|---|---|
+| Bronze | `deploy_bronze()` | Source data as delivered, with expected columns and classes: the SEC 13F archives (one pin per archive, six tables), OpenFIGI replies, Tiingo prices, trading calendar, Fama-French factors |
+| Silver | `deploy_silver()` | Fixes and correctness: filings with usable date, relations, summed holdings, amendment state, identity acceptance (D2, D6), unit corrections (D1), clean prices, terminal events |
+| Gold | `deploy_gold()` | Analysis inputs: activity proxy, universe per formation (liquidity screen switchable), cohort, F1 with the zero-holder guard (D5), monthly returns, past returns |
+| Backtests | `deploy_backtests()` | `cs` weights, drifting long-short returns, cost and borrow scenarios, double sort, FF5 + UMD alphas, rank IC |
+| Reports | `deploy_reports()` | Analysis tables, HTML report, memo inputs |
+
+Every deploy follows the same shape: build from unit-tested helpers, run
+`run_test_<layer>()` through `run_logged_test()` (log in `logs/tests/`), stop if any
+check fails, otherwise pin with `save_local_pin()`.
+
+Storage: one versioned `pins::board_folder()` (`data/prod/`, git-ignored). Pin names
+carry the layer as prefix (`bronze_sec_2014q1`, `silver_holdings`, `gold_signal`).
+Tables are stored as **parquet**. A rerun with identical content creates no version; a
+change adds a version folder, older versions stay (time travel with
+`pins::pin_versions()` and `pins::pin_download(version = )`). Each pin's metadata
+records the exact versions of the pins it was built from (lineage, the per-pin
+equivalent of `pipeline`'s manifest).
+
+Open item for silver (Codex review B04, deferred 2026-11-07): `pins::pin_write()` skips
+a write when the content is identical even if the input versions changed, which would
+leave stale lineage on a data-frame pin. Before silver pins its first data frame,
+`save_local_pin()` must write a new version when `inputs` differ from the current pin's.
+Bronze is unaffected (file pins via `pin_upload()`, skipped upstream by
+`deploy_bronze()`).
+
+Compute: `duckdb` runs **in memory** inside a deploy, reading the parquet files of the
+input pins (`read_parquet()` on the paths returned by `pins::pin_download()`), with
+`dplyr` verbs through `dbplyr`. Large results are written by duckdb to parquet and
+versioned with `pins::pin_upload()`; small results are collected and pinned with
+`pins::pin_write()`. There is no duckdb database file. Settings: `memory_limit` about
+3 GB, `threads` 2, temp directory on the data disk. Secrets from environment variables
+only.
 
 ### 1.1 Keys and table contracts
 
@@ -167,11 +213,11 @@ Assumes Phase 0 starts Fri 19:30 at home. Times are targets; meals and sleep are
 |---|---|---|---|
 | Fri 19:30 to 21:00 | 0 Setup | repo, skeleton, style files, keys checked, CI-free `devtools::check()` passes | |
 | Fri 21:00 to 00:30 | 1 Feasibility spike | gate report (Section 3) | **G1** |
-| Sat 08:00 to 13:00 | 2 Ingestion and cleaning | `filings`, `filing_relations`, `holdings_state` full window | **CP1** |
-| Sat 14:00 to 18:00 | 3 Identity, prices, terminal events | `security_master`, `ticker_alias`, `prices_d`, `terminal_events`, coverage report | **CP2** |
-| Sat 19:00 to 21:00 | 4 Activity proxy and universe | `filer_activity`, universe per formation | **CP3** |
-| Sat 21:00 to 01:00 | 5 F1, `cs`, backtest, costs, evaluation, past-return double sort | results tables | |
-| Sun 08:30 to 12:30 | 6 HTML report, 3-page memo, README, fresh-clone run | tag `v0.1-submission` | **CP4** |
+| Fri 23:45 to Sat 13:00 | 2 Infrastructure, `deploy_bronze()` (SEC), silver filings and holdings | board and pin helpers; bronze SEC pins; `filings`, `filing_relations`, `holdings_state` full window | **CP1** |
+| Sat 14:00 to 18:00 | 3 Bronze OpenFIGI and Tiingo; silver identity, prices, terminal events | `security_master`, `ticker_alias`, `prices_d`, `terminal_events`, coverage report | **CP2** |
+| Sat 19:00 to 21:00 | 4 `deploy_gold()`: activity proxy, universe, cohort, F1 | `filer_activity`, universe per formation, `signal` | **CP3** |
+| Sat 21:00 to 01:00 | 5 `deploy_backtests()`: `cs`, backtest, costs, evaluation, double sort | results tables | |
+| Sun 08:30 to 12:30 | 6 `deploy_reports()`, HTML report, 3-page memo, README, fresh-clone run | tag `v0.1-submission` | **CP4** |
 | Sun 12:30 to 13:30 | Codex code review of the PR (runs while lunch) | findings | |
 | Sun 13:30 to 18:30 | 7 Extensions, in order (Section 5) | improved results | **CP5** |
 | Sun 18:30 to 21:30 | 8 Accepted findings, final memo, fresh-clone run | tag `v1.0` | **CP6** |
