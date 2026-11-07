@@ -59,5 +59,7 @@ archives <- archives |>
 # Save and report
 readr::write_csv(archives, file.path(out_dir, "archives.csv"))
 print(archives |> dplyr::select("file", "size_mb"), n = Inf)
-cat("archives:", nrow(archives), "| total compressed GB:",
-    round(sum(archives$size_mb) / 1e3, 2), "\n")
+cat(
+  "archives:", nrow(archives), "| total compressed GB:",
+  round(sum(archives$size_mb) / 1e3, 2), "\n"
+)

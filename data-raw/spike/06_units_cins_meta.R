@@ -20,11 +20,15 @@ identity <- readr::read_csv(file.path(out_dir, "identity_sample.csv"), show_col_
 ### c  filed after, for an OLD period (the case that separates the two rules: the
 ###    filing-date rule expects dollars, the period rule expects thousands)
 ## duckdb_register lets the database see an R data frame (the CUSIP list) as a table
-ok <- identity |> dplyr::filter(.data$chain_ok) |> dplyr::distinct(.data$cusip, .data$ticker)
+ok <- identity |>
+  dplyr::filter(.data$chain_ok) |>
+  dplyr::distinct(.data$cusip, .data$ticker)
 db_path <- file.path(out_dir, "spike.duckdb")
 if (!file.exists(db_path)) stop(db_path, " does not exist. Run 03_load_duckdb.R first.")
-con <- DBI::dbConnect(duckdb::duckdb(shared_home = FALSE), dbdir = db_path,
-                      read_only = TRUE)
+con <- DBI::dbConnect(duckdb::duckdb(shared_home = FALSE),
+  dbdir = db_path,
+  read_only = TRUE
+)
 duckdb::duckdb_register(con, "ok_cusips", ok)
 rows <- DBI::dbGetQuery(con, "
   SELECT s.SUBMISSIONTYPE AS submission_type,
@@ -42,8 +46,10 @@ DBI::dbDisconnect(con, shutdown = TRUE)
 ## One Tiingo request per ticker covers every period in the sample
 fetch_closes <- function(ticker) {
   resp <- httr2::request("https://api.tiingo.com") |>
-    httr2::req_url_path_append("tiingo/daily", stringr::str_replace_all(ticker, "/", "-"),
-                               "prices") |>
+    httr2::req_url_path_append(
+      "tiingo/daily", stringr::str_replace_all(ticker, "/", "-"),
+      "prices"
+    ) |>
     httr2::req_url_query(startDate = "2008-12-01", endDate = "2025-04-15") |>
     httr2::req_headers(Authorization = paste("Token", Sys.getenv("TIINGO_API_KEY"))) |>
     httr2::req_throttle(rate = 2, realm = "tiingo") |>
@@ -59,14 +65,18 @@ closes <- purrr::map(unique(ok$ticker), fetch_closes) |> purrr::list_rbind()
 period_close <- rows |>
   dplyr::distinct(.data$cusip, .data$period) |>
   dplyr::inner_join(ok, by = dplyr::join_by(cusip), relationship = "many-to-one") |>
-  dplyr::inner_join(closes, by = dplyr::join_by(ticker, closest(period >= date)),
-                    relationship = "many-to-one") |>
+  dplyr::inner_join(closes,
+    by = dplyr::join_by(ticker, closest(period >= date)),
+    relationship = "many-to-one"
+  ) |>
   dplyr::filter(as.numeric(.data$period - .data$date) <= 5) |>
   dplyr::select("cusip", "period", "close")
 
 unit_test <- rows |>
-  dplyr::inner_join(period_close, by = dplyr::join_by(cusip, period),
-                    relationship = "many-to-one") |>
+  dplyr::inner_join(period_close,
+    by = dplyr::join_by(cusip, period),
+    relationship = "many-to-one"
+  ) |>
   dplyr::mutate(
     group = dplyr::case_when(
       .data$filing_date < regime_cutoff ~ "a_filed_before_2023-01-03",
@@ -88,17 +98,27 @@ band <- function(r) {
 }
 cat("\n=== Unit test: share of rows per ratio band, filing-date rule vs period rule ===\n")
 print(unit_test |>
-        dplyr::mutate(filing_rule = band(.data$ratio_filing_rule),
-                      period_rule = band(.data$ratio_period_rule)) |>
-        tidyr::pivot_longer(c("filing_rule", "period_rule"), names_to = "rule",
-                            values_to = "band") |>
-        dplyr::count(.data$group, .data$rule, .data$band) |>
-        dplyr::mutate(share = round(.data$n / sum(.data$n), 4),
-                      .by = c("group", "rule")) |>
-        dplyr::arrange(.data$group, .data$rule, dplyr::desc(.data$n)), n = Inf)
-cat("old-period rows filed after 2023-01-03 (group c): accessions =",
-    nrow(dplyr::distinct(dplyr::filter(unit_test, .data$group == "c_filed_after_old_period"),
-                         .data$filing_date, .data$period)), "\n")
+  dplyr::mutate(
+    filing_rule = band(.data$ratio_filing_rule),
+    period_rule = band(.data$ratio_period_rule)
+  ) |>
+  tidyr::pivot_longer(c("filing_rule", "period_rule"),
+    names_to = "rule",
+    values_to = "band"
+  ) |>
+  dplyr::count(.data$group, .data$rule, .data$band) |>
+  dplyr::mutate(
+    share = round(.data$n / sum(.data$n), 4),
+    .by = c("group", "rule")
+  ) |>
+  dplyr::arrange(.data$group, .data$rule, dplyr::desc(.data$n)), n = Inf)
+cat(
+  "old-period rows filed after 2023-01-03 (group c): accessions =",
+  nrow(dplyr::distinct(
+    dplyr::filter(unit_test, .data$group == "c_filed_after_old_period"),
+    .data$filing_date, .data$period
+  )), "\n"
+)
 
 # 3. Tiingo supported tickers: delisted coverage and ticker reuse ----
 ## Tiingo publishes one file listing every ticker it covers, with first and last price
@@ -110,9 +130,11 @@ tickers <- readr::read_csv(zip_path, show_col_types = FALSE)
 cat("\n=== Tiingo supported tickers ===\n")
 cat("columns:", paste(names(tickers), collapse = ", "), "\n")
 print(dplyr::count(tickers, .data$assetType, .data$exchange, sort = TRUE) |> utils::head(12))
-cat("US stocks with an end date before 2026 (delisted):",
-    sum(tickers$assetType == "Stock" & tickers$priceCurrency == "USD" &
-          tickers$endDate < as.Date("2026-01-01"), na.rm = TRUE), "\n")
-cat("tickers appearing more than once (reuse):",
-    sum(duplicated(tickers$ticker)), "\n")
+is_delisted_us <- tickers$assetType == "Stock" & tickers$priceCurrency == "USD" &
+  tickers$endDate < as.Date("2026-01-01")
+cat("US stocks with an end date before 2026 (delisted):", sum(is_delisted_us, na.rm = TRUE), "\n")
+cat(
+  "tickers appearing more than once (reuse):",
+  sum(duplicated(tickers$ticker)), "\n"
+)
 print(tickers |> dplyr::filter(.data$ticker %in% c("STR", "LPS", "TWTR", "SIVB", "SIVBQ")))

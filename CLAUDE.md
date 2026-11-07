@@ -97,8 +97,10 @@ financial and temporal assumptions.
 * One responsibility per function, explicit arguments, stable return type
   (a tibble), no hidden globals, no side effects except in functions whose name
   says so (`download_*`, `write_*`).
-* Exported or pipeline-facing functions live in `R/<function_name>.R`; small
-  internal helpers in `R/utils-<name>.R`, one per file.
+* One function per file, named `R/<group>_<function_name>.R`, where the group mirrors
+  the owner's `pipeline` folders: `setup`, `load`, `helpers`, `tests` (data-quality
+  suites `run_test_<layer>()`), `deploy`, `report` (plan Section 1). Unit tests in
+  `tests/testthat/test-<function_name>.R`.
 * Aim for under about 50 lines per function. Longer means it does two things.
 * Snake_case verbs for functions (`compute_breadth_change()`); nouns describing
   content and grain for data (`holdings_q`, `returns_m`, `prices_d`, suffix `_q`
@@ -190,7 +192,9 @@ aggregate_infotable_rows <- function(infotable_df) {
 
 * tidyverse style, 2-space indent, lines up to 100 characters, enforced with
   `styler::style_pkg()` and `lintr::lint_package()` (config in `.lintr`).
-* Before proposing a commit: `styler::style_pkg()`, `lintr::lint_package()` clean,
+* Before proposing a commit: `styler::style_pkg()`, `lintr::lint_package()` clean (run
+  `pkgload::load_all()` first in the same session, otherwise the usage linter cannot
+  see the package's own functions and reports false "no visible" warnings),
   `devtools::document()`, `devtools::test()`, and `devtools::check()` without
   errors or warnings.
 

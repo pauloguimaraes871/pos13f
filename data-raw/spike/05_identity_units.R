@@ -25,8 +25,10 @@ regime_cutoff <- as.Date("2023-01-03")
 # Data from duckdb ----
 db_path <- file.path(out_dir, "spike.duckdb")
 if (!file.exists(db_path)) stop(db_path, " does not exist. Run 03_load_duckdb.R first.")
-con <- DBI::dbConnect(duckdb::duckdb(shared_home = FALSE), dbdir = db_path,
-                      read_only = TRUE)
+con <- DBI::dbConnect(duckdb::duckdb(shared_home = FALSE),
+  dbdir = db_path,
+  read_only = TRUE
+)
 ## One query returns every share position with its filing's dates:
 ### JOIN links each holding row (INFOTABLE) to its filing (SUBMISSION)
 ### upper(CUSIP): some filers type CUSIPs in lower case (decision D2)
@@ -57,21 +59,28 @@ DBI::dbDisconnect(con, shutdown = TRUE)
 ## The second group is where identity mapping is expected to fail, so it is oversampled.
 ## Base: the 1500 most widely held CUSIPs at end-2013 (original reports only)
 held_2013 <- positions |>
-  dplyr::filter(.data$archive == "2014q1_form13f.zip", .data$submission_type == "13F-HR",
-                .data$period == as.Date("2013-12-31")) |>
-  dplyr::summarise(holders = dplyr::n_distinct(.data$cik), issuer = dplyr::first(.data$issuer),
-                   .by = "cusip") |>
+  dplyr::filter(
+    .data$archive == "2014q1_form13f.zip", .data$submission_type == "13F-HR",
+    .data$period == as.Date("2013-12-31")
+  ) |>
+  dplyr::summarise(
+    holders = dplyr::n_distinct(.data$cik), issuer = dplyr::first(.data$issuer),
+    .by = "cusip"
+  ) |>
   dplyr::slice_max(.data$holders, n = 1500, with_ties = FALSE)
 ## Survivor = held in a report FOR period 2025-03-31. The 2025 archive also carries late
 ## filings for old periods, which would wrongly mark long-gone stocks as survivors
 ## (Codex finding G1-01: FLIR, gone in 2021, appeared via a late filing).
 cusips_2025 <- positions |>
-  dplyr::filter(.data$archive == "01mar2025-31may2025_form13f.zip",
-                .data$period == as.Date("2025-03-31")) |>
+  dplyr::filter(
+    .data$archive == "01mar2025-31may2025_form13f.zip",
+    .data$period == as.Date("2025-03-31")
+  ) |>
   dplyr::distinct(.data$cusip)
 held_2013 <- held_2013 |>
   dplyr::mutate(stratum = dplyr::if_else(.data$cusip %in% cusips_2025$cusip,
-                                         "survivor", "gone_by_2025"))
+    "survivor", "gone_by_2025"
+  ))
 ## Stratum sizes in the top 1500, needed to reweight the sample rates to the population
 print(dplyr::count(held_2013, .data$stratum))
 sample_random <- dplyr::bind_rows(
@@ -83,16 +92,22 @@ sample_random <- dplyr::bind_rows(
 ## Named special cases: known hard situations (dual share classes, renamed company,
 ## bankruptcies), taken from the data itself rather than typed from memory: most held
 ## CUSIP per issuer-name pattern in the 2023q1 archive
-special_patterns <- c(alphabet = "^ALPHABET", berkshire = "^BERKSHIRE HATHAWAY",
-                      meta = "^META PLATFORMS|^FACEBOOK", twitter = "^TWITTER",
-                      svb = "^SVB FINL", bed_bath = "^BED BATH")
+special_patterns <- c(
+  alphabet = "^ALPHABET", berkshire = "^BERKSHIRE HATHAWAY",
+  meta = "^META PLATFORMS|^FACEBOOK", twitter = "^TWITTER",
+  svb = "^SVB FINL", bed_bath = "^BED BATH"
+)
 sample_special <- purrr::imap(special_patterns, function(pattern, label) {
   positions |>
-    dplyr::filter(.data$archive == "2023q1_form13f.zip",
-                  .data$period == as.Date("2022-12-31"),
-                  stringr::str_detect(.data$issuer, pattern)) |>
-    dplyr::summarise(holders = dplyr::n_distinct(.data$cik),
-                     issuer = dplyr::first(.data$issuer), .by = "cusip") |>
+    dplyr::filter(
+      .data$archive == "2023q1_form13f.zip",
+      .data$period == as.Date("2022-12-31"),
+      stringr::str_detect(.data$issuer, pattern)
+    ) |>
+    dplyr::summarise(
+      holders = dplyr::n_distinct(.data$cik),
+      issuer = dplyr::first(.data$issuer), .by = "cusip"
+    ) |>
     dplyr::filter(.data$holders >= 20) |>
     dplyr::mutate(stratum = paste0("special_", label))
 }) |>
@@ -129,10 +144,12 @@ map_openfigi <- function(cusips) {
       return(tibble::tibble(cusip = cusip, figi_status = res$warning %||% "error"))
     }
     recs <- purrr::map(res$data, function(r) {
-      tibble::tibble(figi = r$figi %||% NA, composite_figi = r$compositeFIGI %||% NA,
-                     ticker = r$ticker %||% NA, figi_name = r$name %||% NA,
-                     security_type = r$securityType %||% NA,
-                     security_type2 = r$securityType2 %||% NA)
+      tibble::tibble(
+        figi = r$figi %||% NA, composite_figi = r$compositeFIGI %||% NA,
+        ticker = r$ticker %||% NA, figi_name = r$name %||% NA,
+        security_type = r$securityType %||% NA,
+        security_type2 = r$securityType2 %||% NA
+      )
     }) |>
       purrr::list_rbind()
     ## The composite-level record is the one whose FIGI equals its composite FIGI
@@ -159,25 +176,33 @@ tiingo_get <- function(path, query = list()) {
   resp <- httr2::request("https://api.tiingo.com") |>
     httr2::req_url_path_append(path) |>
     httr2::req_url_query(!!!query) |>
-    httr2::req_headers(Authorization = paste("Token", Sys.getenv("TIINGO_API_KEY")),
-                       `Content-Type` = "application/json") |>
+    httr2::req_headers(
+      Authorization = paste("Token", Sys.getenv("TIINGO_API_KEY")),
+      `Content-Type` = "application/json"
+    ) |>
     httr2::req_throttle(rate = 2, realm = "tiingo") |>
     httr2::req_error(is_error = function(r) FALSE) |>
     httr2::req_perform()
-  list(status = httr2::resp_status(resp),
-       body = if (httr2::resp_status(resp) == 200) {
-         httr2::resp_body_json(resp, simplifyVector = TRUE)
-       })
+  list(
+    status = httr2::resp_status(resp),
+    body = if (httr2::resp_status(resp) == 200) {
+      httr2::resp_body_json(resp, simplifyVector = TRUE)
+    }
+  )
 }
 ## OpenFIGI writes share classes as BRK/B; Tiingo uses BRK-B
 tiingo_ticker <- function(x) stringr::str_replace_all(x, "/", "-")
 
 tiingo_check <- function(ticker, period) {
-  if (is.na(ticker)) return(tibble::tibble(meta_status = NA_integer_))
+  if (is.na(ticker)) {
+    return(tibble::tibble(meta_status = NA_integer_))
+  }
   tk <- tiingo_ticker(ticker)
   meta <- tiingo_get(paste0("tiingo/daily/", tk))
-  px <- tiingo_get(paste0("tiingo/daily/", tk, "/prices"),
-                   list(startDate = format(period - 10), endDate = format(period)))
+  px <- tiingo_get(
+    paste0("tiingo/daily/", tk, "/prices"),
+    list(startDate = format(period - 10), endDate = format(period))
+  )
   close_at_period <- if (px$status == 200 && length(px$body) > 0) {
     utils::tail(px$body$close, 1)
   } else {
@@ -196,15 +221,19 @@ tiingo_check <- function(ticker, period) {
 implied <- positions |>
   dplyr::filter(.data$submission_type == "13F-HR") |>
   dplyr::semi_join(id_sample, by = dplyr::join_by(cusip, archive, period)) |>
-  dplyr::summarise(implied_price = stats::median(.data$implied_price),
-                   .by = c("cusip", "archive", "period"))
+  dplyr::summarise(
+    implied_price = stats::median(.data$implied_price),
+    .by = c("cusip", "archive", "period")
+  )
 
 ## Assemble the chain per stock and decide success:
 ### chain_ok = FIGI found AND Tiingo price found AND price ratio between 0.8 and 1.25
 identity <- id_sample |>
   dplyr::left_join(figi_map, by = dplyr::join_by(cusip), relationship = "one-to-one") |>
-  dplyr::left_join(implied, by = dplyr::join_by(cusip, archive, period),
-                   relationship = "one-to-one") |>
+  dplyr::left_join(implied,
+    by = dplyr::join_by(cusip, archive, period),
+    relationship = "one-to-one"
+  ) |>
   dplyr::mutate(tiingo = purrr::map2(.data$ticker, .data$period, tiingo_check)) |>
   tidyr::unnest("tiingo") |>
   dplyr::mutate(
@@ -216,14 +245,21 @@ readr::write_csv(identity, file.path(out_dir, "identity_sample.csv"))
 
 cat("\n=== Identity chain success by stratum ===\n")
 print(identity |>
-        dplyr::mutate(stratum = dplyr::if_else(stringr::str_starts(.data$stratum, "special"),
-                                               "special", .data$stratum)) |>
-        dplyr::summarise(n = dplyr::n(), figi_found = sum(.data$figi_status == "ok"),
-                         tiingo_price_found = sum(!is.na(.data$close_at_period)),
-                         chain_ok = sum(.data$chain_ok), .by = "stratum"))
+  dplyr::mutate(stratum = dplyr::if_else(stringr::str_starts(.data$stratum, "special"),
+    "special", .data$stratum
+  )) |>
+  dplyr::summarise(
+    n = dplyr::n(), figi_found = sum(.data$figi_status == "ok"),
+    tiingo_price_found = sum(!is.na(.data$close_at_period)),
+    chain_ok = sum(.data$chain_ok), .by = "stratum"
+  ))
 cat("\n=== Per CUSIP ===\n")
-print(identity |>
-        dplyr::select("stratum", "cusip", "issuer", "ticker", "composite_figi",
-                      "security_type", "tiingo_name", "tiingo_end", "price_ratio",
-                      "chain_ok"),
-      n = Inf, width = Inf)
+print(
+  identity |>
+    dplyr::select(
+      "stratum", "cusip", "issuer", "ticker", "composite_figi",
+      "security_type", "tiingo_name", "tiingo_end", "price_ratio",
+      "chain_ok"
+    ),
+  n = Inf, width = Inf
+)

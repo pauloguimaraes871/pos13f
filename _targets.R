@@ -1,33 +1,65 @@
 # Pipeline definition for pos13f ----
 #
-# Planned target groups (docs/IMPLEMENTATION_PLAN.md, Section 1), in data-flow order:
-#   ingest    SEC 13F data set archives, streamed one at a time into duckdb on disk
-#   clean     filings, filing_relations, holdings_state (amendment state machine,
-#             filing-date value regime, overlap flags)
-#   identity  security_master (CUSIP to composite FIGI via OpenFIGI), ticker_alias
-#   prices    prices_d from Tiingo, terminal_events (baseline and stress policy)
-#   universe  filer_activity proxy and the liquid equity universe per formation
-#   signal    F1 breadth change on the matched filer cohort at each formation
-#   backtest  cs weights, drifting long-short returns, cost and borrow scenarios
-#   report    self-contained HTML report (inst/report) and memo inputs
+# Medallion layers (docs/IMPLEMENTATION_PLAN.md, Section 1.0), each deployed by one
+# function that builds, runs its data-quality suite and pins the result on the
+# versioned board in data/prod/:
+#   bronze     deploy_bronze(): SEC 13F archives as delivered (OpenFIGI, Tiingo next)
+#   silver     deploy_silver(): filings, holdings state, identity, units, prices
+#   gold       deploy_gold(): activity proxy, universe, cohort, F1 signal
+#   backtests  deploy_backtests(): weights, returns, costs, evaluation
+#   reports    deploy_reports(): analysis tables, HTML report, memo inputs
 #
-# Profiles (plan Section 1 and 7):
-#   full     real SEC, Tiingo and OpenFIGI data; needs the three keys in .Renviron
-#   fixture  offline run on inst/extdata/fixture, no keys and no network, under a
-#            minute; selected with Sys.setenv(TAR_PROJECT = "fixture") once added
+# Unit tests run first, on every run, and every deploy depends on them: a failing
+# unit test stops the pipeline before anything is downloaded or pinned.
+#
+# Window setting (demo profile): only archives whose filing window lies between
+# POS13F_WINDOW_START and POS13F_WINDOW_END are ingested. Defaults cover every archive.
+# Example for a short real-data run: POS13F_WINDOW_START=2024-01-01 in .Renviron.
 
 # Load package code ----
 ## The package is developed in place, so the pipeline runs on the working tree
 ## rather than on an installed copy that could be stale
 devtools::load_all(quiet = TRUE)
 
-targets::tar_option_set(packages = character(0))
+## imports = "pos13f" makes targets track the package's functions, so editing a deploy
+## function invalidates the targets that use it
+targets::tar_option_set(packages = character(0), imports = "pos13f")
+
+ingest_from <- as.Date(Sys.getenv("POS13F_WINDOW_START", "2013-01-01"))
+ingest_to <- as.Date(Sys.getenv("POS13F_WINDOW_END", "2099-12-31"))
 
 # Targets ----
 list(
-  ## Placeholder so targets::tar_make() runs during Phase 0
+  ## Unit tests: always rerun; downstream targets depend on their result
   targets::tar_target(
-    package_version,
-    as.character(base::getNamespaceVersion("pos13f"))
+    unit_tests,
+    run_unit_tests(),
+    cue = targets::tar_cue(mode = "always")
+  ),
+
+  ## Board location; every deploy opens the board from this path
+  targets::tar_target(board_path, file.path("data", "prod")),
+
+  ## The archive list is fetched on every run so new SEC postings are picked up
+  targets::tar_target(
+    sec_archives,
+    list_sec_archives(verbose = FALSE),
+    cue = targets::tar_cue(mode = "always")
+  ),
+  targets::tar_target(
+    sec_archives_window,
+    dplyr::filter(
+      sec_archives, .data$window_start >= .env$ingest_from,
+      .data$window_end <= .env$ingest_to
+    )
+  ),
+
+  ## Bronze: archives already pinned from the same source file are skipped inside
+  targets::tar_target(
+    bronze_sec,
+    {
+      unit_tests
+      deploy_bronze(init_pipeline_board(board_path), sec_archives_window, verbose = FALSE)
+    }
   )
 )

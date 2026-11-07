@@ -20,11 +20,10 @@ Suggests:
     sandwich,
     tarchetypes,
     targets,
-    testthat (>= 3.0.0),
-    withr
+    withr,
+    zip
 Config/testthat/edition: 3
-Imports: 
-    arrow,
+Imports:
     DBI,
     dbplyr,
     dplyr (>= 1.1.0),
@@ -32,9 +31,14 @@ Imports:
     httr2,
     jsonlite,
     lubridate,
+    nanoparquet,
+    pins,
     purrr,
     readr,
     rlang,
     stringr,
+    testthat (>= 3.0.0),
     tibble,
     tidyr
+Depends: 
+    R (>= 4.1.0)
