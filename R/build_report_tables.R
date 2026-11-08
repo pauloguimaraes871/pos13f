@@ -10,8 +10,9 @@
 #'   `ladder`, `costs`, `persistence`, `momentum`, `summary`, `rank_ic`,
 #'   `rank_ic_by_formation`, `monotonicity`, `inference`, `spreads`, `benchmark`,
 #'   `extremes`, `data_quality`, `file_rows`, `audit` (the filing-date audit rows),
-#'   `cohort_exclusions`, `combination`, `capm` (CAPM alpha of each spread),
-#'   `uncertainty` (interval of each mean and minimum detectable effects) and `lineage`.
+#'   `cohort_exclusions`, `combination`, `leave_one_year_out`, `capm` (CAPM alpha of
+#'   each spread), `uncertainty` (interval of each mean and minimum detectable effects)
+#'   and `lineage`.
 #' @export
 build_report_tables <- function(board) {
   # Validate inputs
@@ -50,6 +51,7 @@ build_report_tables <- function(board) {
     ),
     audit = read("silver_filing_date_audit"),
     combination = report_momentum_combination(spreads),
+    leave_one_year_out = report_leave_one_year_out(spreads),
     lineage = report_pin_lineage(board)
   )
 }
