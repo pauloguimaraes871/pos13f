@@ -3,6 +3,8 @@
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/pauloguimaraes871/pos13f/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/pauloguimaraes871/pos13f/actions/workflows/R-CMD-check.yaml)
+[![test-coverage](https://github.com/pauloguimaraes871/pos13f/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/pauloguimaraes871/pos13f/actions/workflows/test-coverage.yaml)
+[![lint](https://github.com/pauloguimaraes871/pos13f/actions/workflows/lint.yaml/badge.svg)](https://github.com/pauloguimaraes871/pos13f/actions/workflows/lint.yaml)
 <!-- badges: end -->
 
 ## Overview
@@ -153,7 +155,8 @@ logs/             data-quality test logs (git-ignored)
 
 ## Development
 
-`devtools::test()` runs the unit tests, `lintr::lint_package()` the style checks, and
-GitHub Actions runs `R CMD check` on every pull request and every push to main on a
-clean Ubuntu
-machine, with no keys or data.
+`devtools::test()` runs the unit tests and `lintr::lint_package()` the style checks.
+On every pull request and every push to main, GitHub Actions runs three workflows on a
+clean Ubuntu machine, with no keys or data: `R CMD check` with the unit tests, test
+coverage with `covr` (the percentage is in each run's summary), and `lintr`, which
+fails on any lint.

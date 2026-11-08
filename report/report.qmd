@@ -158,7 +158,7 @@ The pre-registered verdicts are:
    momentum tercile F1 still earns a positive spread, `r f(ds$ann_return)`% a year on
    average with the highest Sharpe ratio of any test (`r f(ds$sharpe)`), but its alpha
    interval `r ci(ds)` includes zero, so the pre-registered verdict is "not shown"
-   (Section 5.5).
+   (@sec-momentum).
 
 Momentum itself was weak in this window: UMD averaged `r f(umd$ann_mean[1])`% a year
 (t = `r f(umd$t_mean[1])`) against `r f(umd$ann_mean[2])`% since 1963. The results are
@@ -887,6 +887,26 @@ equal-weight portfolio of the universe `r f(unc$ann_return[unc$series == "ew_uni
 The top F1 quintile earned more than both before costs and the bottom quintile less
 than both, but the intervals of all four overlap widely.
 
+## Year by year {#sec-years}
+
+```{r years, fig.height = 3, fig.cap = "Gross cs spread by calendar year (bars) and the full-sample mean (line). 2014 starts in March and 2026 ends in October."}
+loyo <- tb$leave_one_year_out
+ly <- loyo[loyo$signal == key & loyo$method == "cs" & loyo$design == "unconditional", ]
+ggplot(ly, aes(factor(year), year_mean)) +
+  geom_col(fill = ifelse(ly$year_mean >= 0, navy, gold), width = 0.7) +
+  geom_hline(yintercept = ly$mean_all[1], colour = grey, linetype = "dashed") +
+  labs(x = NULL, y = "% a year")
+```
+
+The spread is far from steady: it ranges from `r f(min(ly$year_mean), 1)`% in
+`r ly$year[which.min(ly$year_mean)]` to `r f(max(ly$year_mean), 1)`% in
+`r ly$year[which.max(ly$year_mean)]`, and `r sum(ly$year_mean < 0)` of the
+`r nrow(ly)` years are negative. No single year carries the result, though: leaving any
+one year out moves the mean between `r f(min(ly$mean_without))`% (without
+`r ly$year[which.min(ly$mean_without)]`) and `r f(max(ly$mean_without))`% (without
+`r ly$year[which.max(ly$mean_without)]`), against `r f(ly$mean_all[1])`% for the whole
+sample. The last three years, all strongly positive, contribute a large part of it.
+
 ## Costs and turnover
 
 ```{r turnover}
@@ -921,7 +941,21 @@ rankings change a lot from one quarter to the next. A signal averaged over two q
 may keep more of each quintile and trade less; that is a hypothesis for the cost
 extension, not a result.
 
-## Conditional on momentum
+```{r turnover-time, fig.height = 3, fig.cap = "Value traded per rebalance by each leg under cs weights, as a multiple of the leg's value."}
+tr <- tb$costs$by_rebalance
+tr <- tr[tr$signal == key & tr$design == "unconditional" & tr$method == "cs" & tr$quantile %in% c(1, 5), ]
+tr$leg <- ifelse(tr$quantile == 5, "Top quintile (long)", "Bottom quintile (short)")
+ggplot(tr, aes(dates, traded, colour = leg)) + geom_line(linewidth = 0.7) +
+  scale_colour_manual(values = c("Top quintile (long)" = navy, "Bottom quintile (short)" = gold)) +
+  labs(x = NULL, y = "Traded / leg value")
+```
+
+Turnover is high at every rebalance rather than in a few episodes: the legs trade
+between `r f(min(tr$traded))` and `r f(max(tr$traded))` times their value and drift
+down only slightly over the sample, so the cost estimate does not depend on a
+particular period.
+
+## Conditional on momentum {#sec-momentum}
 
 ```{r terciles}
 ter <- s[grepl("f1_breadth_change_in_mom_12_1\\|cs\\|tercile_[0-9]\\|spread_0_0", s$series) & s$lag == 3, ]
@@ -1011,10 +1045,12 @@ way.
    conditional strategy and counted as a new trial.
 3. Costs: turnover by leg and through time, factoRverse's market impact model by
    strategy size, realistic fees and borrow, and F1 smoothed over two quarters.
-4. Leave-one-year-out and sector checks of the top-quintile premium.
+4. Sector checks of the top-quintile premium (the leave-one-year-out check is in
+   @sec-years).
 5. Disclosure-lag profile: returns in months 1 to 12 after formation.
 6. Activity-based filer split and a capacity-based universe.
-7. Continuous integration on macOS and Windows, with coverage and lint badges.
+7. Continuous integration on macOS and Windows (coverage and lint already run on
+   Ubuntu).
 
 # Appendix A: pin lineage {.appendix}
 

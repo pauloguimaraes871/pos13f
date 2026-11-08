@@ -59,6 +59,10 @@ ew_univ <- row("ew_universe")
 tv <- tb$costs$turnover
 tv <- tv[tv$signal == key & tv$design == "unconditional" & tv$method == "cs", ]
 conf <- tb$coverage
+loyo <- tb$leave_one_year_out
+ly <- loyo[loyo$signal == key & loyo$method == "cs" & loyo$design == "unconditional", ]
+tr <- tb$costs$by_rebalance
+tr <- tr[tr$signal == key & tr$design == "unconditional" & tr$method == "cs" & tr$quantile %in% c(1, 5), ]
 delay <- tb$filing_delay
 share_at <- function(d) delay$share_usable[delay$days == d]
 ter <- s[grepl("f1_breadth_change_in_mom_12_1\\|cs\\|tercile_[0-9]\\|spread_0_0", s$series) & s$lag == 3, ]
@@ -296,7 +300,9 @@ sales). F1 has little persistence: its rank correlation between consecutive form
 averages `r f(mean(pers$rank_autocorrelation))`. A borrow fee of 100 bps a year on the
 short leg costs a further 1 percentage point. A signal averaged over two quarters may
 keep more of each quintile and trade less; that is a hypothesis for the next step, not
-a result.
+a result. Turnover is high at every rebalance, between `r f(min(tr$traded))`
+and `r f(max(tr$traded))` times a leg's value, drifting down only slightly over the
+sample.
 
 ## F1 and momentum
 
@@ -344,6 +350,14 @@ The spread is a zero-investment portfolio, judged against zero and the factors. 
 long legs are compared with SPY, the default holding of a US equity investor, and with
 an equal-weight portfolio of the same 1,000 stocks: the top quintile earned more than
 both before costs, but the intervals overlap widely.
+
+**Year by year.** The cs spread swings from `r f(min(ly$year_mean), 1)`% in
+`r ly$year[which.min(ly$year_mean)]` to `r f(max(ly$year_mean), 1)`% in
+`r ly$year[which.max(ly$year_mean)]`, and `r sum(ly$year_mean < 0)` of `r nrow(ly)`
+years are negative. Leaving any one year out keeps the mean between
+`r f(min(ly$mean_without))`% and `r f(max(ly$mean_without))`% (`r f(ly$mean_all[1])`%
+with all years): no single year carries the result, though the last three years, all
+strongly positive, contribute a large part of it.
 
 # How to read the result
 
@@ -414,7 +428,7 @@ In priority order:
    trials.
 2. **F1 among past winners.** The strongest pattern in the results is the F1 spread
    within the high-momentum tercile. Tested as a pre-registered conditional strategy,
-   counted as a new trial, with leave-one-year-out and sector checks, it would show
+   counted as a new trial, with sector checks, it would show
    whether rising breadth confirms a price trend or the pattern is noise.
 3. **Costs.** Turnover decides whether any version is tradable. A smoothed F1 (two
    quarters), factoRverse's market impact model by strategy size, and realistic borrow
