@@ -31,6 +31,8 @@ report_capm_alphas <- function(spreads, factors, lag = 3) {
   }
 
   one <- function(df) {
+    ## Newey-West weights neighbouring residuals, so the rows must be in date order
+    df <- dplyr::arrange(df, .data$dates)
     fit <- stats::lm(net_return ~ mkt_rf, data = df)
     alpha <- unname(stats::coef(fit)[1])
     se <- unname(sqrt(diag(sandwich::NeweyWest(fit, lag = lag, prewhite = FALSE)))[1])

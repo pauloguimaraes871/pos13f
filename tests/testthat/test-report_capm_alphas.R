@@ -27,6 +27,14 @@ test_that("each spread gets the intercept and slope of its market regression", {
   expect_true(out$capm_lo[1] < out$capm_alpha[1] && out$capm_alpha[1] < out$capm_hi[1])
 })
 
+test_that("the Newey-West error does not depend on the order of the rows", {
+  x <- capm_fixture()
+  shuffled <- x$spreads[withr::with_seed(1, sample(nrow(x$spreads))), ]
+  ordered <- report_capm_alphas(x$spreads, x$factors)
+  out <- report_capm_alphas(shuffled, x$factors)
+  expect_equal(out$capm_t[match(ordered$series, out$series)], ordered$capm_t)
+})
+
 test_that("missing columns are refused", {
   x <- capm_fixture()
   expect_error(report_capm_alphas(x$spreads[, -7], x$factors), "net_return")
