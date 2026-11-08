@@ -9,6 +9,9 @@
 #' @param daily Tibble of daily returns (`tickers`, `dates`, `ret` in percentage points).
 #' @param double_sorts List of character pairs `c(signal, conditioner)` for which
 #'   `add_conditional_rank()` adds a within-tercile rank.
+#' @param fwd_col Character scalar, the forward-return column backtested as
+#'   `fwd_return_1m`: `"fwd_return_1m"` (baseline) or `"fwd_return_1m_stress"` (the
+#'   month of a stock's last price compounded with -30%, plan 1.6).
 #'
 #' @return A named list: `signals_m_df`, `fwd_return_m_df` (`fwd_return_1m` only),
 #'   `liquidity_m_df`, `volatility_m_df` (`meta_dataframe`), `daily_returns_m_xts`
@@ -36,7 +39,11 @@
 #' the covariance input only: it fabricates no row of any panel.
 #' @noRd
 shape_backtest_inputs <- function(signals, fwd, liquidity, volatility, daily,
-                                  double_sorts = list(c("f1_breadth_change", "mom_12_1"))) {
+                                  double_sorts = list(c("f1_breadth_change", "mom_12_1")),
+                                  fwd_col = "fwd_return_1m") {
+  if (!fwd_col %in% c("fwd_return_1m", "fwd_return_1m_stress")) {
+    stop("fwd_col must be fwd_return_1m or fwd_return_1m_stress.")
+  }
   as_double_date <- function(df) dplyr::mutate(df, dates = as.Date(as.numeric(.data$dates)))
   signals <- as_double_date(signals)
   for (pair in double_sorts) signals <- add_conditional_rank(signals, pair[1], pair[2])
@@ -63,7 +70,8 @@ shape_backtest_inputs <- function(signals, fwd, liquidity, volatility, daily,
   }
   list(
     signals_m_df = meta(signals, "gold_signals_m_df", type = "signals"),
-    fwd_return_m_df = meta(dplyr::select(fwd, "id", "tickers", "dates", "fwd_return_1m"),
+    fwd_return_m_df = meta(
+      dplyr::select(fwd, "id", "tickers", "dates", fwd_return_1m = dplyr::all_of(fwd_col)),
       "gold_fwd_1m_returns_m_df",
       type = "target"
     ),

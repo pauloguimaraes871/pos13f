@@ -354,9 +354,13 @@ fewer than 10 positions are excluded.
   whole universe before AND rules, so a cut on raw F1 would give an independent sort.
 - Spreads, cost scenarios and borrow fee: `compute_spread_returns()`; evaluation:
   `summarise_backtest_returns()` (Newey-West lags 3 and 6, FF5 + UMD alpha from the
-  `bronze_ff_factors_m` pin), `compute_rank_ic()`, `test_monotonicity()`,
-  `compute_spread_inference()` (break-even fee, minimum detectable effect, probabilistic
-  Sharpe). Suite: `run_test_backtests()`.
+  `bronze_ff_factors_m` pin), `compute_rank_ic()`, `test_monotonicity()`
+  (intersection-union: one-sided Newey-West test per adjacent quintile spread, joint
+  p-value the largest), `compute_spread_inference()` (break-even fee, minimum detectable
+  effect, and an IID probabilistic Sharpe as a diagnostic only). The `cs` ladder is
+  rerun on `fwd_return_1m_stress` as the terminal-stress scenario. Suite:
+  `run_test_backtests()`. Codex review of PR #7 (2026-11-08) replaced a centred-bootstrap
+  monotonicity test whose null configuration overstated evidence.
 - `rp` covariances: sample covariance of the previous 240 daily returns. factoRverse
   slices daily returns up to and including the first day of the holding month, which can
   follow the formation, so daily returns dated on the first of a month are left out of

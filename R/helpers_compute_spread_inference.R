@@ -3,15 +3,16 @@
 #' Three numbers the memo reports next to the spread (Sections 7 and 8): the trading fee
 #' at which the net spread earns nothing, the smallest annual mean the test could detect
 #' with 80% power at 5% two-sided given the spread's Newey-West standard error, and the
-#' probability that the true Sharpe ratio is above zero given the sample's skewness and
-#' kurtosis (the deflated Sharpe ratio of Bailey and Lopez de Prado with one trial)
-#' \[mem\].
+#' probabilistic Sharpe ratio: the probability that the true Sharpe ratio is above zero
+#' given the sample's skewness and kurtosis \[mem\]. The latter assumes independent
+#' months (an IID diagnostic): it is neither adjusted for serial dependence nor deflated
+#' for multiple trials, and the memo's inference rests on the Newey-West intervals.
 #'
 #' @param spreads Tibble from `compute_spread_returns()`.
 #' @param lag Numeric scalar, Newey-West lag for the standard error.
 #'
 #' @return A tibble with `breakeven_bps` (fee in bps per dollar traded, each side, with no
-#'   borrow fee), `mde_ann` (percentage points per year), `psr` (probability) and
+#'   borrow fee), `mde_ann` (percentage points per year), `psr_iid` (probability) and
 #'   `n_months`.
 #' @noRd
 compute_spread_inference <- function(spreads, lag = 3) {
@@ -30,7 +31,7 @@ compute_spread_inference <- function(spreads, lag = 3) {
   tibble::tibble(
     breakeven_bps = mean(r) / cost_per_bp,
     mde_ann = 12 * (stats::qnorm(0.975) + stats::qnorm(0.8)) * se,
-    psr = stats::pnorm(sr * sqrt(n - 1) / sqrt(1 - skew * sr + (kurt - 1) / 4 * sr^2)),
+    psr_iid = stats::pnorm(sr * sqrt(n - 1) / sqrt(1 - skew * sr + (kurt - 1) / 4 * sr^2)),
     n_months = n
   )
 }

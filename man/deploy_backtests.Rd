@@ -39,3 +39,8 @@ scenarios, and the momentum double sort under \code{cs}. Then evaluates every se
 \code{summarise_backtest_returns()}, the rank IC, the monotonicity test and the spread
 inference, runs \code{\link[=run_test_backtests]{run_test_backtests()}} and pins the tables.
 }
+\details{
+The terminal-stress scenario (plan 1.6: the month of a stock's last price compounded
+with -30\%) reruns each signal's \code{cs} ladder on \code{fwd_return_1m_stress}, as design
+\code{"terminal_stress"}.
+}

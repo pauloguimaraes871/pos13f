@@ -126,8 +126,11 @@ arrive weeks later.
   between the deadline and month end is outside the test (conservative for F1).
 - Top minus bottom quintile, `cs` weights, dollar neutral. All five quintile portfolios
   are backtested (the full ladder), so the memo shows whether returns rise across F1
-  quintiles, not only at the extremes; a monotonic-relation bootstrap test (Patton and
-  Timmermann 2010; Romano and Wolf 2013 **[mem]**) is a diagnostic, not a verdict.
+  quintiles, not only at the extremes; an intersection-union monotonicity test (every
+  adjacent quintile spread must have a positive mean; one-sided Newey-West tests, joint
+  p-value the largest of them) is a diagnostic, not a verdict.
+- Terminal stress (plan 1.6): the `cs` ladder is rerun with the month of a stock's last
+  price compounded with -30%, and its legs and spread are reported next to the baseline.
 - Weighting robustness (owner decision 2026-11-08): `cs` is the pre-registered
   construction; `ew` and `rp` are robustness checks, not trials. A verdict counts as
   robust only if it holds under all three (a conjunctive hurdle, which cannot inflate

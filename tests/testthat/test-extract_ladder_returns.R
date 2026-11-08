@@ -8,7 +8,8 @@ test_that("every series is dated by its holding month and net equals raw minus c
   costs <- finished$direct_cost + finished$market_impact_cost
   expect_equal(finished$net_return, finished$raw_return - costs)
   ## Trades only at the formations: December, March, June
-  traded <- unique(ladder$dates[ladder$direct_cost > 0])
+  ## Costs between rebalances are floating-point noise (about 1e-17)
+  traded <- unique(ladder$dates[ladder$direct_cost > 1e-10])
   expect_true(all(lubridate::month(traded) %in% c(3, 6, 12)))
 })
 

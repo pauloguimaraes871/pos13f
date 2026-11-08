@@ -17,6 +17,11 @@
 #' @param verbose Logical; print progress.
 #'
 #' @return A tibble with one row per pinned table: `table` and `version`.
+#'
+#' @details
+#' The terminal-stress scenario (plan 1.6: the month of a stock's last price compounded
+#' with -30%) reruns each signal's `cs` ladder on `fwd_return_1m_stress`, as design
+#' `"terminal_stress"`.
 #' @export
 deploy_backtests <- function(board, signals = "f1_breadth_change", methods = c("cs", "ew", "rp"),
                              double_sort = c("f1_breadth_change", "mom_12_1"),
@@ -46,7 +51,18 @@ deploy_backtests <- function(board, signals = "f1_breadth_change", methods = c("
     )) |>
       dplyr::mutate(signal = rank_col, method = "cs", design = paste0("tercile_", k))
   })
-  ladder <- dplyr::bind_rows(ladders, double)
+  # Terminal stress: the same cs ladders on the stressed forward returns
+  stressed_inputs <- build_backtest_inputs(board,
+    double_sorts = list(double_sort), fwd_col = "fwd_return_1m_stress"
+  )
+  stress <- purrr::map(signals, function(signal) {
+    if (verbose) message("Backtest: ", signal, " under cs, terminal stress")
+    extract_ladder_returns(run_quantile_ladder(stressed_inputs, signal, "cs",
+      label = paste(signal, "cs_stress", sep = "_")
+    )) |>
+      dplyr::mutate(signal = signal, method = "cs", design = "terminal_stress")
+  })
+  ladder <- dplyr::bind_rows(ladders, double, stress)
 
   # Evaluation, test, pins
   results <- evaluate_backtests(ladder, inputs, factors, board, signals)

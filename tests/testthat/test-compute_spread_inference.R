@@ -10,5 +10,5 @@ test_that("break-even cost, MDE and PSR follow from the spread", {
   scen <- dplyr::filter(spreads, .data$cost_bps == 10, .data$borrow_bps == 0)
   expect_equal(out$breakeven_bps, mean(gross) / mean(scen$trading_cost / 10))
   expect_gt(out$mde_ann, 0)
-  expect_true(out$psr > 0 && out$psr < 1)
+  expect_true(out$psr_iid > 0 && out$psr_iid < 1)
 })

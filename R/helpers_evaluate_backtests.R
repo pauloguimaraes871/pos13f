@@ -88,7 +88,9 @@ evaluate_backtests <- function(ladder, inputs, factors, board, signals) {
       dplyr::mutate(test = purrr::map(.data$data, test_monotonicity)) |>
       dplyr::select(-"data") |>
       tidyr::unnest("test") |>
-      dplyr::mutate(diffs = purrr::map_chr(.data$diffs, \(d) paste(round(d, 4), collapse = ", "))),
+      dplyr::mutate(dplyr::across(
+        c("diffs", "t_stats"), \(col) purrr::map_chr(col, \(d) paste(round(d, 4), collapse = ", "))
+      )),
     inference = spreads |>
       tidyr::nest(data = -dplyr::all_of(keys)) |>
       dplyr::mutate(inf = purrr::map(.data$data, compute_spread_inference)) |>

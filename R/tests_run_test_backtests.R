@@ -52,11 +52,17 @@ run_test_backtests <- function(ladder, spreads, benchmark, min_holdings = 20,
     testthat::expect_true(all(ladder$direct_cost[!rebalance] < 1e-10))
   })
 
-  testthat::test_that("every ladder covers the same finished months", {
+  testthat::test_that("every quantile of every ladder covers the same finished months", {
+    all_months <- sort(unique(finished$dates))
     months <- dplyr::summarise(finished,
-      n = dplyr::n_distinct(.data$dates), .by = c(keys, "quantile")
+      same = identical(sort(unique(.data$dates)), all_months), .by = c(keys, "quantile")
     )
-    testthat::expect_equal(length(unique(months$n)), 1)
+    testthat::expect_true(all(months$same))
+    ## Every ladder has all its quantiles in every finished month
+    per_month <- dplyr::summarise(finished,
+      n = dplyr::n_distinct(.data$quantile), .by = c(keys, "dates")
+    )
+    testthat::expect_equal(length(unique(per_month$n)), 1)
   })
 
   testthat::test_that("net spreads fall with the fee and the borrow charge", {
