@@ -23,13 +23,19 @@ write_backtest_cohort <- function(board, cohort, name, verbose, keep_versions = 
   }
 
   pin_name <- paste0("backtests_cohort_", name)
-  sources <- c("gold_signals_m_df", "gold_fwd_1m_returns_m_df", "gold_liquidity_m_df")
+  ## Every pin build_backtest_inputs() reads, including the covariance inputs of rp
+  sources <- c(
+    "gold_signals_m_df", "gold_fwd_1m_returns_m_df", "gold_liquidity_m_df",
+    "gold_volatility_m_df", "gold_daily_returns_d"
+  )
   inputs <- purrr::map(
     stats::setNames(sources, sources), \(p) pins::pin_meta(board, p)$local$version
   )
   write <- function() {
     pins::pin_write(board, cohort,
       name = pin_name, type = "rds", versioned = TRUE,
+      ## Without this, pins skips a write whose object is unchanged and drops new lineage
+      force_identical_write = TRUE,
       metadata = list(
         stage = "backtests", table = paste0("cohort_", name), inputs = inputs,
         factoRverse_version = as.character(utils::packageVersion("factoRverse"))
