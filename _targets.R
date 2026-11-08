@@ -34,6 +34,15 @@ targets::tar_option_set(packages = character(0), imports = "pos13f")
 ingest_from <- as.Date(Sys.getenv("POS13F_WINDOW_START", "2013-01-01"))
 ## Last day of the latest SEC batch in the sample (archive 01jun2026-31aug2026)
 window_end <- as.Date("2026-08-31")
+## First report quarter usable as q-1: all its filings, which start the day after the
+## quarter ends, must lie inside the window. The XML data sets start in May 2013, so 2013Q1
+## is partial and 2013Q2 is the floor. A later window start moves it to the first quarter
+## ending on or after the day before the window opens (the demo profile, opening
+## 2024-01-01, starts with Q4 2023 as q-1 at end-May 2024)
+first_quarter <- max(
+  as.Date("2013-06-30"),
+  lubridate::ceiling_date(ingest_from, "quarter", change_on_boundary = FALSE) - 1
+)
 
 # Targets ----
 list(
@@ -151,7 +160,7 @@ list(
       silver_filings
       silver_holdings
       silver_prices
-      deploy_gold(init_pipeline_board(board_path), verbose = FALSE)
+      deploy_gold(init_pipeline_board(board_path), first_quarter = first_quarter, verbose = FALSE)
     }
   ),
 

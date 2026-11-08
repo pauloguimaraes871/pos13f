@@ -9,6 +9,10 @@
 #' @param log_path Character scalar, folder for the data-quality log.
 #' @param memory_limit Character scalar, duckdb memory limit.
 #' @param temp_dir Character scalar, folder where duckdb spills and writes work files.
+#' @param first_quarter Date scalar, earliest report quarter that may serve as q-1. A
+#'   formation whose q-1 reports were filed before the ingested window would compare a
+#'   full quarter with a handful of late filers, so formations start at the first q-1
+#'   quarter whose whole filing window was ingested (see `build_formation_dates()`).
 #' @param verbose Logical; print progress and pins messages.
 #'
 #' @return A tibble with one row per pinned table: `table` and `version`.
@@ -25,14 +29,17 @@
 #' @export
 deploy_gold <- function(board, log_path = file.path("logs", "tests"), memory_limit = "3GB",
                         temp_dir = file.path("data-raw", "cache", "duckdb_tmp"),
-                        verbose = TRUE) {
+                        first_quarter = as.Date("2013-06-30"), verbose = TRUE) {
   # Validate inputs
   if (!inherits(board, "pins_board")) stop("board must be a pins board (init_pipeline_board()).")
+  if (!inherits(first_quarter, "Date") || length(first_quarter) != 1 || is.na(first_quarter)) {
+    stop("first_quarter must be a single non-missing Date (a report quarter end).")
+  }
 
   # Small silver tables, in R
   read <- function(name) pins::pin_read(board, name)
   calendar <- read("silver_trading_calendar")$date
-  formations <- build_formation_dates(calendar)
+  formations <- build_formation_dates(calendar, first_quarter = first_quarter)
   master <- read("silver_security_master")
   terminal <- read("silver_terminal_events")
   filings <- read("silver_filings")
