@@ -1,5 +1,7 @@
 # Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
-# Fails when lintr finds any lint, with the rules in .lintr
+# Fails when lintr finds any lint, with the rules in .lintr. The package is loaded first:
+# without it the object-usage linter cannot see package functions or the .data pronoun
+# and reports hundreds of false findings.
 on:
   push:
     branches: [main, master]
@@ -27,11 +29,13 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::lintr, local::.
+          extra-packages: any::lintr, any::pkgload, local::.
           needs: lint
 
       - name: Lint the package
-        run: lintr::lint_package()
+        run: |
+          pkgload::load_all()
+          lintr::lint_package()
         shell: Rscript {0}
         env:
           LINTR_ERROR_ON_LINT: true
