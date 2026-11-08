@@ -45,6 +45,9 @@ scenarios, and the momentum double sort under \code{cs}. Then evaluates every se
 inference, runs \code{\link[=run_test_backtests]{run_test_backtests()}} and pins the tables.
 }
 \details{
+Every quintile cohort is also pinned whole, as the factoRverse \code{port_backtest_cohort}
+S4 object (\verb{backtests_cohort_<signal>_<method>_<design>}), so its slots and plot and
+summary methods can be used directly; each keeps its two latest versions.
 The terminal-stress scenario (plan 1.6: the month of a stock's last price compounded
 with -30\%) reruns each signal's \code{cs} ladder on \code{fwd_return_1m_stress}, as design
 \code{"terminal_stress"}.
