@@ -49,4 +49,4 @@ Imports:
 Depends: 
     R (>= 4.1.0)
 Remotes:
-    local::vendor/factoRverse_0.9.1.tar.gz
+    factoRverse=local::vendor/factoRverse_0.9.1.tar.gz
