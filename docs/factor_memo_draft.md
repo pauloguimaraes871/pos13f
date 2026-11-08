@@ -237,6 +237,16 @@ Each entry: date, change, reason. Details in `data-raw/spike/G1_report.md`.
   exclusions rose from 8,052 to 8,658 filer-formations (619 left the cohort, 13
   re-entered, 0.3% of members); pooled rank correlation of F1 with the previous build
   0.9994. The "drop both" sensitivity of Plan 1.4 is not implemented.
+- 2026-11-08 (D11). New universe screen, set before any return was computed: a stock
+  must have traded (positive dollar volume) on at least 90% of the previous 63 trading
+  days, and `presence` now counts traded days instead of price rows (owner decision).
+  Reason: the first factoRverse dry run stopped on AL, which Tiingo keeps pricing at a
+  frozen 65 with zero volume since 2026-04-09; it entered the 2026-05-29 universe on
+  its earlier volume, and its 63-day dollar volume later reached 0, which factoRverse
+  cannot divide by. Point in time: the screen reads only the 63 days before t. A member
+  that passes keeps positive 63-day volume through its three holding months. Known
+  limitation: a stock that goes stale after formation earns 0 until the next formation
+  (close to its cash-out value) and does not receive the -30% stress return.
 - 2026-11-07 (D8). The implied-price check counts the filers whose value per share lies
   within 0.5 to 2 times Tiingo's raw close and accepts when most do, instead of the
   median of D6. Reason: same intent, and counts stream over 77 million rows where a

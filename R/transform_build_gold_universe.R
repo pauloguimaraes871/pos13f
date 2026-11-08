@@ -4,8 +4,9 @@
 #' the cohort held in q-1 or q: an attributable price source; identity accepted at t
 #' (most quarter-q cohort holders report a value per share near Tiingo's close); traded
 #' on t (the portfolio executes at the close of t); previous close of at least
-#' `min_price`; at least `min_history_days` of price history; complete features; then
-#' the top `n_universe` by previous 63-day median dollar volume (ties by
+#' `min_price`; traded (positive dollar volume) on at least `min_presence` percent of
+#' the previous 63 trading days; at least `min_history_days` of price history; complete
+#' features; then the top `n_universe` by previous 63-day median dollar volume (ties by
 #' `instrument_id`); finally stocks with zero cohort holders in q-1 or q leave (D5: a
 #' CUSIP change would otherwise create false initiations and exits).
 #'
@@ -18,6 +19,11 @@
 #'   `has_price_source`).
 #' @param n_universe,min_price,min_history_days Numeric scalars (plan 1.8: 1000, 5 USD,
 #'   12 months).
+#' @param min_presence Numeric scalar, percent of the previous 63 trading days with
+#'   positive dollar volume (owner decision 2026-11-08: 90). Tiingo keeps carrying a
+#'   frozen price with zero volume after some cash takeovers (AL in 2026); without this
+#'   screen such a stale stock entered the universe on its earlier volume. A member that
+#'   passes keeps positive 63-day volume through its three holding months.
 #' @param max_init_share,min_holders_break Numeric scalars: an instrument with at least
 #'   `min_holders_break` quarter-q holders, more than `max_init_share` of them new, is a
 #'   suspected CUSIP change (memo deviation D9). On 2026-11-07 the largest F1 values were
@@ -33,6 +39,7 @@
 #' @noRd
 build_gold_universe <- function(formations, breadth, features, terminal, master,
                                 n_universe = 1000, min_price = 5, min_history_days = 365,
+                                min_presence = 90,
                                 max_init_share = 0.5, min_holders_break = 20) {
   feature_cols <- c("close_prev", "median_volfin_3m", "mom_12_1", "rev_1m", "vol_3m", "amihud")
   priced <- master |>
@@ -68,6 +75,7 @@ build_gold_universe <- function(formations, breadth, features, terminal, master,
           "cusip_change_suspect",
         is.na(.data$date) | .data$date != .data$formation_date ~ "not_traded_at_t",
         .data$close_prev < min_price ~ "price_below_min",
+        .data$presence < min_presence ~ "low_presence",
         .data$first_date > .data$formation_date - min_history_days ~ "short_history",
         !.data$complete ~ "missing_features"
       )

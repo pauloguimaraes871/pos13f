@@ -12,8 +12,8 @@
 #' @return Character scalar, a SELECT statement with one row per `instrument_id` and
 #'   `month` (Date, first day of the calendar month): `date` (the row's trading day),
 #'   `close_prev` (USD), `mean_volfin_3m` and `median_volfin_3m` (USD per day, previous
-#'   63 trading days), `presence` (percent of the previous 63 trading days with a
-#'   price), `daily_vol` and `vol_3m` (standard deviation of daily returns over the
+#'   63 trading days), `presence` (percent of the previous 63 trading days with positive
+#'   dollar volume), `daily_vol` and `vol_3m` (standard deviation of daily returns over the
 #'   previous 21 and 63 trading days, percentage points), `mom_12_1` (return from 252
 #'   to 22 trading days before, percentage points), `rev_1m` (return over the previous
 #'   21 trading days, percentage points), `amihud` (mean of absolute return over dollar
@@ -46,7 +46,8 @@ sql_gold_monthly_features <- function(prices_d, returns_d) {
     "lag(close) OVER (PARTITION BY instrument_id ORDER BY day_index) AS close_prev, ",
     "avg(dollar_volume) ", w(63, 1), " AS mean_volfin_3m, ",
     "median(dollar_volume) ", w(63, 1), " AS median_volfin_3m, ",
-    "100.0 * count(*) ", w(63, 1), " / 63 AS presence, ",
+    ## A stale row (price carried, zero volume) is not a traded day
+    "100.0 * sum(CASE WHEN dollar_volume > 0 THEN 1 ELSE 0 END) ", w(63, 1), " / 63 AS presence, ",
     "100 * stddev_samp(ret) ", w(21, 1), " AS daily_vol, ",
     "100 * stddev_samp(ret) ", w(63, 1), " AS vol_3m, ",
     "100 * (exp(sum(ln(1 + ret)) ", w(252, 22), ") - 1) AS mom_12_1, ",

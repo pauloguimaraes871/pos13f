@@ -1,6 +1,6 @@
 ## Membership bounds are loose here: eight members turn over fast in a three-formation toy
 universe_block <- function(panels) {
-  function() check_gold_universe_filters(panels, 8, 5, 300, 1, 1)
+  function() check_gold_universe_filters(panels, 8, 5, 300, 90, 1, 1)
 }
 
 test_that("the universe screens pass on the real-data toy", {

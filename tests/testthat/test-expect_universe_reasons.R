@@ -30,7 +30,7 @@ test_that("the first failing screen wins, and missing values fail no screen", {
     ticker = c("AAA", "BBB", "CCC"), n_prev = 30, n_curr = 30, n_init = c(25, 0, 0),
     n_match = c(5, 30, 30), date = as.Date("2020-02-28"), close_prev = c(2, NA, 50),
     first_date = as.Date("2010-01-04"), median_volfin_3m = 1e7, mom_12_1 = 1, rev_1m = 1,
-    vol_3m = 1, amihud = 1
+    vol_3m = 1, amihud = 1, presence = 100
   )
   out <- expect_universe_reasons(row, n_universe = 10)
   ## A fails identity, D9 and price: identity comes first; B's missing close is caught as

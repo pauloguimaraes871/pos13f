@@ -19,6 +19,7 @@ run_test_gold(
   max_cohort_change = 0.25,
   min_price = 5,
   min_history_days = 365,
+  min_presence = 90,
   min_positions = 10,
   max_membership_turnover = 0.15,
   max_reentry_share = 0.03
@@ -51,8 +52,9 @@ run_test_gold(
 \item{max_cohort_change}{Numeric scalar, largest relative change of the cohort size
 between formations.}
 
-\item{min_price, min_history_days, min_positions}{Numeric scalars, the screens of
-\code{build_gold_universe()} and \code{select_gold_cohort()} (5 USD, 365 days, 10 positions).}
+\item{min_price, min_history_days, min_presence, min_positions}{Numeric scalars, the
+screens of \code{build_gold_universe()} and \code{select_gold_cohort()} (5 USD, 365 days, 90
+percent of traded days, 10 positions).}
 
 \item{max_membership_turnover, max_reentry_share}{Numeric scalars, bounds on how
 fast universe membership changes (see \code{check_gold_universe_filters()}).}
