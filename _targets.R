@@ -7,7 +7,7 @@
 #              SEC 13F archives, FIGI replies and daily prices, as delivered
 #   silver     deploy_silver(): filings, holdings state, identity, units, prices
 #   gold       deploy_gold(): activity proxy, universe, cohort, F1 signal
-#   backtests  deploy_backtests(): weights, returns, costs, evaluation
+#   backtests  deploy_backtests(): quintile ladders in factoRverse, spreads, evaluation
 #   reports    deploy_reports(): analysis tables, HTML report, memo inputs
 #
 # Unit tests run first, on every run, and every deploy depends on them: a failing
@@ -152,6 +152,23 @@ list(
       silver_holdings
       silver_prices
       deploy_gold(init_pipeline_board(board_path), verbose = FALSE)
+    }
+  ),
+
+  ## Bronze Fama-French factors: monthly FF5 and momentum for the alpha regressions
+  targets::tar_target(
+    bronze_ff_factors,
+    deploy_bronze_ff_factors(init_pipeline_board(board_path), verbose = FALSE)
+  ),
+
+  ## Backtests: quintile ladders under cs, ew and rp, the momentum double sort, spreads
+  ## under cost and borrow scenarios, and their evaluation
+  targets::tar_target(
+    backtests,
+    {
+      gold
+      bronze_ff_factors
+      deploy_backtests(init_pipeline_board(board_path), verbose = FALSE)
     }
   )
 )
