@@ -18,7 +18,7 @@ point-in-time rules, backtests it on the 1,000 most liquid US stocks with the
 
 * [report/report.html](report/report.html): the technical report (data engineering,
   software, design and every result), a self-contained HTML file.
-* [memo/memo.pdf](memo/memo.pdf): the three-page research memo.
+* [memo/memo.pdf](memo/memo.pdf): the five-page research memo.
 
 ## Research question and result
 
@@ -77,14 +77,16 @@ from the committed ones.
 
 Keys are read from the environment and never printed or written to logs.
 
-**Time and disk.** Measured on the author's Windows laptop:
+**Time and disk.** Measured on the author's Windows laptop on 2026-11-08: the demo row
+in a fresh clone (its `targets` log), the full-sample row from the target timings of the
+last full run, which read prices from the cache:
 
 | Run | Time | Pins (`data/`) | Download cache (`data-raw/cache/`) |
 |---|---|---|---|
 | Demo profile, clean clone | about 1 h 50 min, of which 1 h 15 min is the Tiingo download | 3.2 GB | 1.8 GB |
 | Full sample, after downloads | about 55 min (backtests 23 min, gold 10 min, silver holdings 8 min) | 14 GB with pin history | 9.9 GB |
 
-Tiingo prices are downloaded per ticker (about 9,100 tickers) into
+Tiingo prices are downloaded per ticker (9,097 ticker files in that demo run) into
 `data-raw/cache/`, so an interrupted run resumes where it stopped. The full-sample
 SEC download adds the 2013 to 2023 archives to the demo's.
 

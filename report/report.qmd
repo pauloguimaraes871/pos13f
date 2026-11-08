@@ -50,6 +50,27 @@ rp_net <- sp("rp", tag = "spread_25_100")
 exc <- tb$cohort_exclusions
 exc_of <- function(outcome, col) exc[[col]][exc$outcome == outcome]
 conf <- tb$coverage
+## Sample description computed from the tables, so a demo render describes its own sample
+month_year <- function(d) paste(month.name[as.integer(format(d, "%m"))], format(d, "%Y"))
+first_month <- min(tb$spreads$dates)
+last_month <- max(tb$spreads$dates)
+n_formations <- length(unique(tb$rank_ic_by_formation$formation[tb$rank_ic_by_formation$signal == key]))
+audit_rd <- tb$audit[!is.na(tb$audit$accepted_date), ]
+audit_late <- audit_rd[!audit_rd$accepted_by_filing_date, ]
+audit_exception <- if (nrow(audit_late) == 0) {
+  "Every sampled filing was accepted no later than its filing date."
+} else {
+  paste0(
+    nrow(audit_late), " sampled filing", if (nrow(audit_late) > 1) "s were" else " was",
+    " accepted after its filing date (for example accession ", audit_late$accession_number[1],
+    ", filing date ", audit_late$filing_date[1], ", accepted ", audit_late$edgar_accepted[1],
+    " Eastern, usable from ", audit_late$usable_date[1], "). EDGAR can grant a filing date",
+    " earlier than the acceptance (a filing date adjustment). Each such filing was still",
+    " public before the close of its usable date."
+  )
+}
+lb <- tb$leg_betas
+leg_beta <- function(q) lb$beta[lb$signal == key & lb$method == "cs" & lb$design == "unconditional" & lb$quantile == q]
 dq <- function(pin, field) {
   if (field == "n_rows" && pin %in% tb$file_rows$pin) return(tb$file_rows$n_rows[tb$file_rows$pin == pin])
   tb$data_quality$value[tb$data_quality$pin == pin & tb$data_quality$field == field]
@@ -85,8 +106,9 @@ The question is whether the change in the number of institutions holding a stock
 from Form 13F filings only after they are public, predicts the cross-section of returns
 of liquid US stocks net of trading costs, and whether it adds to price momentum. The
 signal, F1, is the change in breadth of ownership defined by Chen, Hong and Stein
-(2002). The test covers `r months` months of returns (March 2014 to October 2026) and
-50 quarterly formations, on a universe of about 1,000 liquid stocks. The factor
+(2002). The test covers `r months` months of returns (`r month_year(first_month)` to
+`r month_year(last_month)`) and `r n_formations` quarterly formations, on a universe of
+about 1,000 liquid stocks. The factor
 regressions use `r u_gross$n_alpha_months` months, because the Fama-French data end one
 month earlier.
 
@@ -134,8 +156,8 @@ out, October 2026, was the worst of the sample: the cs F1 spread lost
 `r f(-tb$spreads$gross_return[tb$spreads$signal == key & tb$spreads$method == "cs" & tb$spreads$design == "unconditional" & tb$spreads$cost_bps == 0 & tb$spreads$borrow_bps == 0 & tb$spreads$dates == max(tb$spreads$dates)], 1)`%
 and the momentum spread
 `r f(-tb$spreads$gross_return[tb$spreads$signal == "mom_12_1" & tb$spreads$design == "reference" & tb$spreads$cost_bps == 0 & tb$spreads$borrow_bps == 0 & tb$spreads$dates == max(tb$spreads$dates)], 1)`%.
-On the common months the alphas are therefore higher than they would be with October
-included. The CAPM alpha removes only the market; the legs have almost equal market
+How the alphas would change with that month included cannot be known until its factor
+data are published, since the factors may also have fallen. The CAPM alpha removes only the market; the legs have almost equal market
 betas, so it differs from the mean mainly through that missing month, and the gap
 between the CAPM and FF6 alphas shows what the other five factors explain.
 
@@ -156,7 +178,8 @@ The pre-registered verdicts are:
    `r f(rp_net$ann_return)`% under rp.
 3. **Incremental to momentum: positive in direction, not significant.** Within each
    momentum tercile F1 still earns a positive spread, `r f(ds$ann_return)`% a year on
-   average with the highest Sharpe ratio of any test (`r f(ds$sharpe)`), but its alpha
+   average with the highest Sharpe ratio of the tests in the summary table
+   (`r f(ds$sharpe)`), but its alpha
    interval `r ci(ds)` includes zero, so the pre-registered verdict is "not shown"
    (@sec-momentum).
 
@@ -205,7 +228,8 @@ service, was used to map each share CUSIP to a composite FIGI and a ticker. The
 composite FIGI is the permanent `instrument_id` from silver on, and the ticker links to
 Tiingo. OpenFIGI answers with today's mapping, so a ticker reused later by another
 company could attach the wrong prices. This is guarded by an implied-price check
-(Section 2.4). Of 13F holding value, 71.7% is priced; 24.2% is not US common stock or
+(Section 2.4). Of 13F holding value, as measured when the security master was built
+(implementation plan, Section 1.6), 71.7% is priced; 24.2% is not US common stock or
 has no mapping (ETFs, ADRs and funds, out of scope); 3.7% is common stock with no Tiingo
 price series; and 0.45% is removed by the identity checks (0.34% on tickers shared with
 a later company, 0.11% where the holders' prices disagree with Tiingo).
@@ -302,12 +326,7 @@ knitr::kable(data.frame(
 ), col.names = c("Check", "Result"))
 ```
 
-The one sampled filing accepted after its filing date is an amendment (accession
-0001628280-20-013177) with filing date 2020-09-01 that EDGAR accepted at 9:01 am on
-2020-09-02. EDGAR can grant a filing date earlier than the acceptance (a filing date
-adjustment). That filing was usable from 2020-09-02 and public seven hours before that
-day's close; 2020-09-02 was not a formation date in any case, so no portfolio used it on
-that day. The binding check passes for every sampled filing.
+`r audit_exception` The binding check passes for every sampled filing.
 
 The same rule is tested inside the pipeline: the silver checks confirm that every
 `usable_date` is the first trading day after its filing date, that every filing date
@@ -373,7 +392,9 @@ CUSIP so that no prices are needed. The rule removes about
 `r pct(exc_of("index_like", "share_filers"))` of filers but
 `r pct(exc_of("index_like", "share_value"))` of 13F dollar value: the largest have
 thousands of positions and keep about nine in ten from one quarter to the next. Because
-F1 counts each filer once, the signal loses a tenth of its holders, not half. A manager
+they hold many stocks each, they account for
+`r pct(exc_of("index_like", "share_positions"))` of all quarter-q positions, and their
+weight among a stock's holders differs from stock to stock. A manager
 that files one report for both its active and passive books is classified as a whole.
 
 **Identity acceptance.** A stock's CUSIP-to-ticker mapping is accepted at t only if most
@@ -601,8 +622,9 @@ gold signals panel, so F1b, F1c or a blend need a new column and no new backtest
   monthly returns, which implicitly resizes the legs to equal value every month (the
   usual convention for academic factor spreads); weights within each leg drift between
   rebalances. In practice a desk rebalances to neutrality on a schedule and often
-  targets equal beta instead; here the two legs have almost the same market beta (1.18
-  and 1.17), so dollar neutral is close to beta neutral.
+  targets equal beta instead; here the two legs have almost the same market beta
+  (`r f(leg_beta(5))` for the top quintile and `r f(leg_beta(1))` for the bottom one
+  under cs), so dollar neutral is close to beta neutral.
 - *Weights.* cs weights are the signal score times a liquidity score; the short leg is
   scored on the negated signal, so its largest weights go to the most negative F1.
 - *Costs.* factoRverse charges two costs on every trade: a direct cost (fee times the
@@ -706,7 +728,8 @@ The evaluation uses:
   terciles and F1 quintiles are formed within each tercile, which asks whether F1
   predicts returns among stocks with similar momentum.
 - **Rank information coefficient.** At each formation, the rank correlation between F1
-  and each stock's next three-month return, averaged over the 50 formations.
+  and each stock's next three-month return, averaged over the `r n_formations`
+  formations.
 - **Monotonicity.** Returns should rise across all five quintiles, not only at the
   extremes. The test requires every adjacent spread to be positive (intersection-union),
   in the spirit of Patton and Timmermann (2010); it is a diagnostic.
@@ -773,7 +796,7 @@ of the two quarters.
 
 ```{r reasons}
 r <- tb$universe$reasons
-tot <- stats::aggregate(n ~ reason, data = r, FUN = sum)
+tot <- dplyr::summarise(r, n = sum(n), .by = "reason")
 order_of <- c(
   "no_price_source", "identity_unverifiable", "identity_rejected", "cusip_change_suspect",
   "not_traded_at_t", "price_below_min", "low_presence", "short_history", "missing_features",
@@ -1012,7 +1035,7 @@ Over the study window UMD averaged `r f(umd$ann_mean[1])`% a year with t =
 `r f(umd$t_mean[1])`, against `r f(umd$ann_mean[2])`% (t = `r f(umd$t_mean[2])`) since
 1963, with large gains and losses from year to year. The study's own momentum spread
 follows UMD closely and has an FF6 alpha near zero. Momentum is the most robust anomaly
-in this family, yet over these twelve years its average was not distinguishable from
+in this family, yet over the study window its average was not distinguishable from
 zero. An insignificant F1 alpha over the same period is therefore weak evidence either
 way.
 

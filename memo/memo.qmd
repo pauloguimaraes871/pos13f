@@ -59,6 +59,27 @@ ew_univ <- row("ew_universe")
 tv <- tb$costs$turnover
 tv <- tv[tv$signal == key & tv$design == "unconditional" & tv$method == "cs", ]
 conf <- tb$coverage
+## Sample description computed from the tables, so a demo render describes its own sample
+month_year <- function(d) paste(month.name[as.integer(format(d, "%m"))], format(d, "%Y"))
+first_month <- min(tb$spreads$dates)
+last_month <- max(tb$spreads$dates)
+n_formations <- length(unique(tb$rank_ic_by_formation$formation[tb$rank_ic_by_formation$signal == key]))
+audit_rd <- tb$audit[!is.na(tb$audit$accepted_date), ]
+audit_late <- audit_rd[!audit_rd$accepted_by_filing_date, ]
+audit_exception <- if (nrow(audit_late) == 0) {
+  "Every sampled filing was accepted no later than its filing date."
+} else {
+  paste0(
+    nrow(audit_late), " sampled filing", if (nrow(audit_late) > 1) "s were" else " was",
+    " accepted after its filing date (for example accession ", audit_late$accession_number[1],
+    ", filing date ", audit_late$filing_date[1], ", accepted ", audit_late$edgar_accepted[1],
+    " Eastern, usable from ", audit_late$usable_date[1], "). EDGAR can grant a filing date",
+    " earlier than the acceptance (a filing date adjustment). Each such filing was still",
+    " public before the close of its usable date."
+  )
+}
+lb <- tb$leg_betas
+leg_beta <- function(q) lb$beta[lb$signal == key & lb$method == "cs" & lb$design == "unconditional" & lb$quantile == q]
 loyo <- tb$leave_one_year_out
 ly <- loyo[loyo$signal == key & loyo$method == "cs" & loyo$design == "unconditional", ]
 tr <- tb$costs$by_rebalance
@@ -67,7 +88,7 @@ delay <- tb$filing_delay
 share_at <- function(d) delay$share_usable[delay$days == d]
 ter <- s[grepl("f1_breadth_change_in_mom_12_1\\|cs\\|tercile_[0-9]\\|spread_0_0", s$series) & s$lag == 3, ]
 ter <- ter[order(ter$series), ]
-reasons <- stats::aggregate(n ~ reason, data = tb$universe$reasons, FUN = sum)
+reasons <- dplyr::summarise(tb$universe$reasons, n = sum(n), .by = "reason")
 reason_share <- function(r) sum(reasons$n[reasons$reason %in% r]) / sum(reasons$n)
 library(ggplot2)
 theme_set(theme_minimal(base_size = 9) + theme(
@@ -149,13 +170,16 @@ are not modelled.
 ex_t <- exc
 ex_t$mean_filers <- n0(round(ex_t$mean_filers))
 ex_t$share_filers <- pct(ex_t$share_filers)
+ex_t$share_positions <- pct(ex_t$share_positions)
 ex_t$share_value <- pct(ex_t$share_value)
 ex_t$outcome <- c(
   member = "Cohort member", index_like = "Index-like", few_positions = "Fewer than 10 positions",
   overlap = "Included in another filer's report"
 )[ex_t$outcome]
-knitr::kable(ex_t, row.names = FALSE, align = "lrrr",
-  col.names = c("Filers at a formation", "Average number", "Share of filers", "Share of 13F value"))
+knitr::kable(ex_t, row.names = FALSE, align = "lrrrr", col.names = c(
+  "Filers at a formation", "Average number", "Share of filers", "Share of positions",
+  "Share of 13F value"
+))
 ```
 
 Candidate stocks are all those held by the cohort, most of them small: on average
@@ -194,12 +218,11 @@ knitr::kable(data.frame(
     paste0(nrow(audit), " of ", nrow(tb$audit)), pct(mean(audit$same_filing_date)),
     pct(mean(audit$usable_after_acceptance)), pct(mean(audit$public_before_trade))
   )
-), col.names = c("Audit of 300 random filings against EDGAR", "Result"))
+), col.names = c(paste("Audit of", nrow(tb$audit), "random filings against EDGAR"), "Result"))
 ```
 
-The one filing accepted after its filing date is an amendment that EDGAR dated
-2020-09-01 and accepted at 9:01 am on 2020-09-02, its usable date, seven hours before
-the close; the pipeline stops if any sampled filing was accepted after that close.
+`r audit_exception` The pipeline stops if any sampled filing was accepted after the
+close of its usable date or its page cannot be read.
 
 # Results
 
@@ -237,7 +260,8 @@ knitr::kable(show, digits = 2, row.names = FALSE)
    break-even fee is `r f(inf_cs$breakeven_bps, 0)` bps per dollar traded.
 3. **Incremental to momentum: positive in direction, not significant.** Within each
    momentum tercile, F1 still earns a positive spread, `r f(ds$ann_return)`% a year on
-   average with the highest Sharpe ratio of any test (`r f(ds$sharpe)`), but its alpha
+   average with the highest Sharpe ratio in the table above (`r f(ds$sharpe)`), but its
+   alpha
    interval `r ci(ds)` includes zero, so the pre-registered verdict is "not shown".
 
 The weighting hurdle is not met: the spread is positive under all three schemes but no
@@ -251,8 +275,8 @@ out, October 2026, was the worst of the sample: the cs F1 spread lost
 `r f(-tb$spreads$gross_return[tb$spreads$signal == key & tb$spreads$method == "cs" & tb$spreads$design == "unconditional" & tb$spreads$cost_bps == 0 & tb$spreads$borrow_bps == 0 & tb$spreads$dates == max(tb$spreads$dates)], 1)`%
 and the momentum spread
 `r f(-tb$spreads$gross_return[tb$spreads$signal == "mom_12_1" & tb$spreads$design == "reference" & tb$spreads$cost_bps == 0 & tb$spreads$borrow_bps == 0 & tb$spreads$dates == max(tb$spreads$dates)], 1)`%.
-On the common months the alphas are therefore higher than they would be with October
-included. The CAPM alpha removes only the market; the legs have almost equal market
+How the alphas would change with that month included cannot be known until its factor
+data are published. The CAPM alpha removes only the market; the legs have almost equal market
 betas, so it differs from the mean mainly through that missing month, and the gap
 between the CAPM and FF6 alphas shows what the other five factors explain.
 
@@ -410,7 +434,8 @@ the repository.
 # Limitations
 
 Short sample and low power; a structural size tilt in F1; identity from today's
-OpenFIGI and Tiingo mappings (of 13F dollar value, 71.7% is priced, 24.2% is out of
+OpenFIGI and Tiingo mappings (of 13F dollar value, as measured when the security
+master was built, 71.7% is priced, 24.2% is out of
 scope or unmapped, 3.7% is common stock with no Tiingo price series, and 0.45% is
 removed by the identity checks, mostly dead firms whose ticker was later reused);
 formation up to two weeks after most filings are public; stocks that stop trading
