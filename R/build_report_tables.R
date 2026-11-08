@@ -9,7 +9,8 @@
 #' @return A named list of tibbles and lists: `coverage`, `filing_delay`, `universe`,
 #'   `ladder`, `costs`, `persistence`, `momentum`, `summary`, `rank_ic`,
 #'   `rank_ic_by_formation`, `monotonicity`, `inference`, `spreads`, `benchmark`,
-#'   `extremes`, `data_quality`, `file_rows` and `lineage`.
+#'   `extremes`, `data_quality`, `file_rows`, `audit` (the filing-date audit rows),
+#'   `combination` and `lineage`.
 #' @export
 build_report_tables <- function(board) {
   # Validate inputs
@@ -41,6 +42,8 @@ build_report_tables <- function(board) {
     file_rows = report_pin_rows(
       board, c("bronze_tiingo_prices", "silver_prices_d", "gold_daily_returns_d")
     ),
+    audit = read("silver_filing_date_audit"),
+    combination = report_momentum_combination(spreads),
     lineage = report_pin_lineage(board)
   )
 }

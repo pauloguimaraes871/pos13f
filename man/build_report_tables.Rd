@@ -13,7 +13,8 @@ build_report_tables(board)
 A named list of tibbles and lists: \code{coverage}, \code{filing_delay}, \code{universe},
 \code{ladder}, \code{costs}, \code{persistence}, \code{momentum}, \code{summary}, \code{rank_ic},
 \code{rank_ic_by_formation}, \code{monotonicity}, \code{inference}, \code{spreads}, \code{benchmark},
-\code{extremes}, \code{data_quality}, \code{file_rows} and \code{lineage}.
+\code{extremes}, \code{data_quality}, \code{file_rows}, \code{audit} (the filing-date audit rows),
+\code{combination} and \code{lineage}.
 }
 \description{
 The report and memo only render; every number they show is computed here, from
