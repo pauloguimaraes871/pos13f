@@ -14,7 +14,8 @@ A named list of tibbles and lists: \code{coverage}, \code{filing_delay}, \code{u
 \code{ladder}, \code{costs}, \code{persistence}, \code{momentum}, \code{summary}, \code{rank_ic},
 \code{rank_ic_by_formation}, \code{monotonicity}, \code{inference}, \code{spreads}, \code{benchmark},
 \code{extremes}, \code{data_quality}, \code{file_rows}, \code{audit} (the filing-date audit rows),
-\code{combination} and \code{lineage}.
+\code{cohort_exclusions}, \code{combination}, \code{capm} (CAPM alpha of each spread),
+\code{uncertainty} (interval of each mean and minimum detectable effects) and \code{lineage}.
 }
 \description{
 The report and memo only render; every number they show is computed here, from
