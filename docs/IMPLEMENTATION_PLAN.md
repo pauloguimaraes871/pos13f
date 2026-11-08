@@ -341,6 +341,33 @@ fewer than 10 positions are excluded.
   same references on `toy_silver_gold.rds`, a real-data sample built by
   `data-raw/make_toy_gold_fixture.R`.
 
+### 1.11 Backtest layer (implemented 2026-11-08 on factoRverse 0.9.1)
+
+- `deploy_backtests()` runs every quintile portfolio of a signal through factoRverse
+  `run_port_backtest()` (`run_quantile_ladder()`, bundled with
+  `create_port_backtest_cohort()`), under `cs`, `ew` and `rp`, plus the dependent
+  momentum double sort under `cs`. A signal is a column of the gold signals panel, so
+  F1b or any later factor needs a column, not new backtest code.
+- Double sort without new infrastructure: `add_conditional_rank()` ranks F1 within its
+  momentum tercile; factoRverse cuts quantiles on that rank and an AND rule
+  (`build_group_rule()`) keeps one tercile. factoRverse applies its quantile cut to the
+  whole universe before AND rules, so a cut on raw F1 would give an independent sort.
+- Spreads, cost scenarios and borrow fee: `compute_spread_returns()`; evaluation:
+  `summarise_backtest_returns()` (Newey-West lags 3 and 6, FF5 + UMD alpha from the
+  `bronze_ff_factors_m` pin), `compute_rank_ic()`, `test_monotonicity()`,
+  `compute_spread_inference()` (break-even fee, minimum detectable effect, probabilistic
+  Sharpe). Suite: `run_test_backtests()`.
+- `rp` covariances: sample covariance of the previous 240 daily returns. factoRverse
+  slices daily returns up to and including the first day of the holding month, which can
+  follow the formation, so daily returns dated on the first of a month are left out of
+  the covariance input. factoRverse needs a window without gaps: inside a stock's life a
+  day without a price row gets a return of 0, which is exact because silver books the
+  move across a gap on the next traded day; 240 days keep the window inside every
+  member's life (365 calendar days of history).
+- factoRverse 0.9.1 is the owner's package with its signal-selection and machine-learning
+  dependencies (brms, lme4, xgboost and others) moved to Suggests; the portfolio path
+  never calls them.
+
 ---
 
 ## 2. Schedule

@@ -124,9 +124,19 @@ arrive weeks later.
   (owner, 2026-11-08): it loses almost no reports and fits the monthly grid of the
   backtest code; the cost is about ten trading days of freshness, so any price reaction
   between the deadline and month end is outside the test (conservative for F1).
-- Top minus bottom quintile, `cs` weights, dollar neutral.
+- Top minus bottom quintile, `cs` weights, dollar neutral. All five quintile portfolios
+  are backtested (the full ladder), so the memo shows whether returns rise across F1
+  quintiles, not only at the extremes; a monotonic-relation bootstrap test (Patton and
+  Timmermann 2010; Romano and Wolf 2013 **[mem]**) is a diagnostic, not a verdict.
+- Weighting robustness (owner decision 2026-11-08): `cs` is the pre-registered
+  construction; `ew` and `rp` are robustness checks, not trials. A verdict counts as
+  robust only if it holds under all three (a conjunctive hurdle, which cannot inflate
+  false positives), never by selecting the best scheme.
 - Costs: 10, 25, 50 bps one-way per dollar traded, break-even cost, borrow fee
-  0 and 100 bps per year on the short leg.
+  0 and 100 bps per year on the short leg. Trading costs are factoRverse's own (fee times
+  weight traded, both legs; shorting costs the same per dollar traded as buying),
+  computed at 5 bps and rescaled exactly to each scenario: market impact is set
+  negligible and the factoRverse validator accepts fees below 10 bps only.
 - Benchmarks: same-universe equal weight, SPY total return, FF5 + UMD.
 - About 50 quarterly formations: inference counts **formations**, not months.
   Newey-West on monthly returns with lags 3 (primary) and 6 (sensitivity); rank IC
@@ -147,7 +157,12 @@ Three separate verdicts, each reported with a 95% confidence interval:
    borrow: "viable" only if positive with the CI reported; break-even cost always
    reported.
 3. **Incremental to momentum.** Double-sort spread and UMD-spanning alpha reported
-   side by side; "subsumed by momentum" if the unconditional alpha is significant and
+   side by side. The double sort is dependent (owner decision 2026-11-08): F1 quintiles
+   within each momentum tercile at formation, top minus bottom averaged over the three
+   terciles, so it measures F1's predictive content conditional on momentum. A z-score
+   blend of F1 and momentum was considered and rejected for this verdict: it tests
+   whether F1 improves a momentum portfolio, not whether F1 predicts returns among
+   stocks with similar momentum; "subsumed by momentum" if the unconditional alpha is significant and
    the double-sort spread CI includes zero.
 
 Minimum economically relevant effect: 2% per year gross long-short alpha.
