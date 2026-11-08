@@ -2277,27 +2277,31 @@ vertical-align: -.125em;
 
 <section id="summary" class="level1" data-number="1">
 <h1 data-number="1"><span class="header-section-number">1</span> Summary</h1>
-<p>The question is whether the change in the number of institutions holding a stock, read from Form 13F filings only after they are public, predicts the cross-section of returns of liquid US stocks net of trading costs, and whether it adds to price momentum. The signal, F1, is the change in breadth of ownership defined by Chen, Hong and Stein (2002). The test covers 152 months (March 2014 to October 2026) and 50 quarterly formations, on a universe of about 1,000 liquid stocks.</p>
+<p>The question is whether the change in the number of institutions holding a stock, read from Form 13F filings only after they are public, predicts the cross-section of returns of liquid US stocks net of trading costs, and whether it adds to price momentum. The signal, F1, is the change in breadth of ownership defined by Chen, Hong and Stein (2002). The test covers 152 months of returns (March 2014 to October 2026) and 50 quarterly formations, on a universe of about 1,000 liquid stocks. The factor regressions use 151 months, because the Fama-French data end one month earlier.</p>
 <p>The study is an R package with a <code>targets</code> pipeline: SEC, Tiingo and OpenFIGI data flow through bronze, silver and gold layers stored as versioned <code>pins</code>, large tables are processed in <code>duckdb</code>, backtests run on the author’s <code>factoRverse</code> package, and this report and the memo are rendered by Quarto from pinned results. <code>renv</code> fixes every package version, and continuous integration checks the package on a clean machine.</p>
 <div class="cell">
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
 <colgroup>
-<col style="width: 37%">
+<col style="width: 36%">
 <col style="width: 11%">
-<col style="width: 11%">
+<col style="width: 10%">
+<col style="width: 8%">
+<col style="width: 3%">
+<col style="width: 7%">
+<col style="width: 4%">
 <col style="width: 15%">
-<col style="width: 11%">
-<col style="width: 12%">
 </colgroup>
 <thead>
 <tr class="header">
 <th style="text-align: left;">Test</th>
 <th style="text-align: right;">Mean, % a year</th>
 <th style="text-align: right;">Volatility, %</th>
-<th style="text-align: right;">FF6 alpha, % a year</th>
-<th style="text-align: right;">Alpha t (NW 3)</th>
-<th style="text-align: left;">95% CI of alpha</th>
+<th style="text-align: right;">CAPM alpha</th>
+<th style="text-align: right;">t</th>
+<th style="text-align: right;">FF6 alpha</th>
+<th style="text-align: right;">t</th>
+<th style="text-align: left;">95% CI of FF6 alpha</th>
 </tr>
 </thead>
 <tbody>
@@ -2305,6 +2309,8 @@ vertical-align: -.125em;
 <td style="text-align: left;">F1 spread, cs weights (pre-registered)</td>
 <td style="text-align: right;">4.48</td>
 <td style="text-align: right;">15.68</td>
+<td style="text-align: right;">6.22</td>
+<td style="text-align: right;">1.84</td>
 <td style="text-align: right;">2.25</td>
 <td style="text-align: right;">1.06</td>
 <td style="text-align: left;">[-1.93, 6.42]</td>
@@ -2313,6 +2319,8 @@ vertical-align: -.125em;
 <td style="text-align: left;">F1 spread, equal weights</td>
 <td style="text-align: right;">3.10</td>
 <td style="text-align: right;">12.74</td>
+<td style="text-align: right;">5.24</td>
+<td style="text-align: right;">2.05</td>
 <td style="text-align: right;">1.61</td>
 <td style="text-align: right;">0.94</td>
 <td style="text-align: left;">[-1.74, 4.95]</td>
@@ -2321,6 +2329,8 @@ vertical-align: -.125em;
 <td style="text-align: left;">F1 spread, risk parity</td>
 <td style="text-align: right;">2.46</td>
 <td style="text-align: right;">9.10</td>
+<td style="text-align: right;">3.41</td>
+<td style="text-align: right;">1.70</td>
 <td style="text-align: right;">0.61</td>
 <td style="text-align: right;">0.41</td>
 <td style="text-align: left;">[-2.28, 3.50]</td>
@@ -2329,6 +2339,8 @@ vertical-align: -.125em;
 <td style="text-align: left;">F1 within momentum terciles (average)</td>
 <td style="text-align: right;">3.39</td>
 <td style="text-align: right;">9.13</td>
+<td style="text-align: right;">3.54</td>
+<td style="text-align: right;">1.61</td>
 <td style="text-align: right;">2.38</td>
 <td style="text-align: right;">1.44</td>
 <td style="text-align: left;">[-0.86, 5.63]</td>
@@ -2337,6 +2349,8 @@ vertical-align: -.125em;
 <td style="text-align: left;">F1 spread, terminal stress</td>
 <td style="text-align: right;">4.88</td>
 <td style="text-align: right;">15.64</td>
+<td style="text-align: right;">6.59</td>
+<td style="text-align: right;">1.95</td>
 <td style="text-align: right;">2.67</td>
 <td style="text-align: right;">1.26</td>
 <td style="text-align: left;">[-1.48, 6.83]</td>
@@ -2345,6 +2359,8 @@ vertical-align: -.125em;
 <td style="text-align: left;">F1 spread net of 25 bps fee and 100 bps borrow</td>
 <td style="text-align: right;">0.71</td>
 <td style="text-align: right;">15.73</td>
+<td style="text-align: right;">2.26</td>
+<td style="text-align: right;">0.67</td>
 <td style="text-align: right;">-1.81</td>
 <td style="text-align: right;">-0.84</td>
 <td style="text-align: left;">[-6.02, 2.40]</td>
@@ -2353,6 +2369,8 @@ vertical-align: -.125em;
 <td style="text-align: left;">Momentum spread (reference), cs weights</td>
 <td style="text-align: right;">5.22</td>
 <td style="text-align: right;">24.73</td>
+<td style="text-align: right;">9.05</td>
+<td style="text-align: right;">1.65</td>
 <td style="text-align: right;">1.19</td>
 <td style="text-align: right;">0.39</td>
 <td style="text-align: left;">[-4.72, 7.10]</td>
@@ -2361,12 +2379,13 @@ vertical-align: -.125em;
 </table>
 </div>
 </div>
-<p>Each row is a long-short portfolio: long the stocks in the top F1 quintile, short those in the bottom quintile, rebalanced every quarter. “FF6 alpha” is the intercept of a regression of the monthly spread on the five Fama-French factors and momentum (UMD), with Newey-West standard errors.</p>
+<p>Each row is a long-short portfolio: long the stocks in the top F1 quintile, short those in the bottom quintile, rebalanced every quarter. Three weighting schemes are used: cs weights each stock by its signal score times a liquidity score (the pre-registered scheme), ew gives equal weights and rp uses risk parity. “FF6 alpha” is the intercept of a regression of the monthly spread on the five Fama-French factors and the momentum factor UMD (up minus down), and “CAPM alpha” the intercept of a regression on the market factor alone; t-statistics and intervals use Newey-West standard errors with 3 lags.</p>
+<p>All alphas are estimated on 151 months, because the Fama-French data end in September 2026, while the means use all 152 months. The month left out, October 2026, was the worst of the sample: the cs F1 spread lost 20.0% and the momentum spread 18.3%. On the common months the alphas are therefore higher than they would be with October included. The CAPM alpha removes only the market; the legs have almost equal market betas, so it differs from the mean mainly through that missing month, and the gap between the CAPM and FF6 alphas shows what the other five factors explain.</p>
 <p>The pre-registered verdicts are:</p>
 <ol type="1">
-<li><strong>Predictive content: no evidence.</strong> The FF6 alpha of the F1 spread is 2.25% a year with a 95% interval of [-1.93, 6.42], and the mean rank information coefficient is 0.011 (t = 0.74). An interval that includes zero is not a rejection: with this sample, only an effect of about 10.8% a year would have been detected reliably.</li>
-<li><strong>Economic viability: not viable.</strong> At a fee of 25 bps per dollar traded and a borrow fee of 100 bps a year, the spread earns 0.71% a year under cs weights and less under the other schemes.</li>
-<li><strong>Incremental to momentum: not shown.</strong> F1 earns a positive spread in every momentum tercile, averaging 3.39% a year, but the interval includes zero, and the F1 and momentum spreads have a correlation of 0.86.</li>
+<li><strong>Predictive content: no evidence.</strong> The FF6 alpha of the F1 spread is 2.25% a year with a 95% interval of [-1.93, 6.42], and the mean rank information coefficient (IC, the rank correlation between F1 and the next quarter’s returns) is 0.011 (t = 0.74). An interval that includes zero is not a rejection: with this sample, a true alpha of about 6.0% a year would be detected only four times out of five.</li>
+<li><strong>Economic viability: viable on the point estimate under cs only, with a wide interval.</strong> At a fee of 25 bps per dollar traded and a borrow fee of 100 bps a year, the cs spread earns 0.71% a year, 95% interval [-6.83, 8.25]. The pre-registered rule calls a positive net return viable, with its interval reported. The interval includes zero, and the same spread earns -0.87% under ew and -1.60% under rp.</li>
+<li><strong>Incremental to momentum: positive in direction, not significant.</strong> Within each momentum tercile F1 still earns a positive spread, 3.39% a year on average with the highest Sharpe ratio of any test (0.37), but its alpha interval [-0.86, 5.63] includes zero, so the pre-registered verdict is “not shown” (Section 5.5).</li>
 </ol>
 <p>Momentum itself was weak in this window: UMD averaged 2.66% a year (t = 0.76) against 7.25% since 1963. The results are inconclusive rather than a clear rejection.</p>
 </section>
@@ -2381,7 +2400,7 @@ vertical-align: -.125em;
 <li><strong>Units.</strong> <code>VALUE</code> was reported in thousands of dollars before 2023-01-03 and in dollars afterwards. The unit is set by the filing date, not the report quarter, so an old quarter amended after the change is read in dollars.</li>
 </ul>
 <p><strong>Tiingo end-of-day prices.</strong> Tiingo provides daily open, high, low, close, volume and an adjusted close (<code>adjClose</code>, adjusted for splits and cash dividends) for current and delisted US tickers. The standard academic source, CRSP, is licensed through WRDS and was not available. Among accessible sources, Tiingo was chosen because it keeps the history of delisted companies (without them the backtest would suffer survivorship bias), gives a total-return series, has an affordable plan with full history and generous rate limits, and has a documented REST API. The silver suite checks that the adjusted close behaves as a total-return series: on dividend and split days the adjusted return agrees with the raw return plus the distribution for at least 99.5% of events, and a known split (AAPL) is reproduced.</p>
-<p><strong>OpenFIGI.</strong> 13F reports identify securities by CUSIP; Tiingo identifies them by ticker. The CUSIP master file is licensed, so OpenFIGI, Bloomberg’s free open symbology service, was used to map each share CUSIP to a composite FIGI and a ticker. The composite FIGI is the permanent <code>instrument_id</code> from silver on, and the ticker links to Tiingo. OpenFIGI answers with today’s mapping, so a ticker reused later by another company could attach the wrong prices. This is guarded by an implied-price check (Section 2.4) and measured: holdings that cannot be priced are 0.45% of 13F holding value, mostly dead firms.</p>
+<p><strong>OpenFIGI.</strong> 13F reports identify securities by CUSIP; Tiingo identifies them by ticker. The CUSIP master file is licensed, so OpenFIGI, Bloomberg’s free open symbology service, was used to map each share CUSIP to a composite FIGI and a ticker. The composite FIGI is the permanent <code>instrument_id</code> from silver on, and the ticker links to Tiingo. OpenFIGI answers with today’s mapping, so a ticker reused later by another company could attach the wrong prices. This is guarded by an implied-price check (Section 2.4). Of 13F holding value, 71.7% is priced; 24.2% is not US common stock or has no mapping (ETFs, ADRs and funds, out of scope); 3.7% is common stock with no Tiingo price series; and 0.45% is removed by the identity checks (0.34% on tickers shared with a later company, 0.11% where the holders’ prices disagree with Tiingo).</p>
 <p><strong>Kenneth French data library.</strong> Monthly Fama-French five factors and momentum (UMD), pinned in bronze so that a rerun does not depend on the library being online.</p>
 </section>
 <section id="medallion-layout" class="level2" data-number="2.2">
@@ -2484,13 +2503,15 @@ vertical-align: -.125em;
 <p>The one sampled filing accepted after its filing date is an amendment (accession 0001628280-20-013177) with filing date 2020-09-01 that EDGAR accepted at 9:01 am on 2020-09-02. EDGAR can grant a filing date earlier than the acceptance (a filing date adjustment). That filing was usable from 2020-09-02 and public seven hours before that day’s close; 2020-09-02 was not a formation date in any case, so no portfolio used it on that day. The binding check passes for every sampled filing.</p>
 <p>The same rule is tested inside the pipeline: the silver checks confirm that every <code>usable_date</code> is the first trading day after its filing date, that every filing date falls inside the window of the SEC archive that contains it, and that the year in each accession number matches its filing date. The gold checks re-read cohort eligibility from the filings, independently of the version table.</p>
 <p><strong>Prices are point in time too.</strong> Every feature used at formation t is computed from trading days strictly before t (Section 2.4). Returns start on the first trading day after t. The USD 5 price floor uses the raw close, never the adjusted close, which is rescaled after later splits and dividends. The covariance input for risk parity uses only returns dated before the formation.</p>
-<p><strong>Two remaining sources of look-ahead are about identity, not timing.</strong> OpenFIGI and Tiingo map securities as of today, so a company whose ticker was later reused may be priced wrongly or not at all; the implied-price check rejects most such cases and the unpriced share is 0.45% of holding value. And CUSIPs that map to more than one instrument over the whole sample are removed from the security master (176 CUSIPs), a decision that uses the full history. Both are disclosed rather than corrected.</p>
+<p><strong>Two remaining sources of look-ahead are about identity, not timing.</strong> OpenFIGI and Tiingo map securities as of today, so a company whose ticker was later reused may be priced wrongly or not at all; the implied-price check rejects most such cases, and the holdings removed this way are 0.45% of 13F value, mostly dead firms. Removing them uses later information, a small survivorship effect. And CUSIPs that map to more than one instrument over the whole sample are removed from the security master (176 CUSIPs), a decision that uses the full history. Both are disclosed rather than corrected.</p>
 </section>
 <section id="deduplication-identity-and-screens" class="level2" data-number="2.4">
 <h2 data-number="2.4" class="anchored" data-anchor-id="deduplication-identity-and-screens"><span class="header-section-number">2.4</span> Deduplication, identity and screens</h2>
-<p><strong>Duplicated rows within a filing.</strong> A 13F filing can report the same CUSIP on several INFOTABLE rows, one for each other manager or investment-discretion category. These rows are parts of one position, so they are summed into a single position per filing and CUSIP. Positions are never summed across filings: across versions of the same report, only the version current at t counts, so an amended report replaces the original instead of being added to it. A filer that holds two CUSIPs of the same instrument (for example two share lines mapped to one FIGI) counts once as a holder of that instrument.</p>
+<p><strong>Duplicated rows within a filing.</strong> A 13F filing can report the same CUSIP on several INFOTABLE rows, one for each other manager or investment-discretion category. These rows are parts of one position, so they are summed into a single position per filing and CUSIP. Across filings, the amendment type decides: a RESTATEMENT replaces the report from its usable date, and a NEW HOLDINGS amendment adds its positions to the report from its own usable date (a position reported in both is summed). At date t only the filings usable by t count. A filer that holds two CUSIPs of the same instrument (for example two share lines mapped to one FIGI) counts once as a holder of that instrument.</p>
 <p><strong>Overlapping managers.</strong> When a filer’s report lists another manager as included in it (OTHERMANAGER2) and that manager also files its own report, the same positions would be counted twice. The smaller of the two reports, by number of positions, is removed from the cohort for that formation; the inclusion links are read only from the report versions current at t, for both quarters compared.</p>
-<p><strong>Filer cohort.</strong> At each formation a filer enters the cohort if it has a report current at t for both quarters compared, holds at least 10 positions in each, and is not index-like (top third by number of positions and bottom third by turnover, recomputed at every formation).</p>
+<p><strong>Confidential treatment.</strong> A manager may ask the SEC to withhold a position for up to a year, usually while it is still building it, and declares on the cover page that positions were omitted. About 113 original reports a quarter carry this declaration (the field is blank on many older filings). A withheld position is revealed later by an amendment, which enters only from its own usable date, so nothing withheld is used before it is public. The cost is the other direction: until it is revealed, a withheld position looks like an exit or a missing initiation, which biases F1 down for the stocks such managers buy. The study does not correct for this.</p>
+<p><strong>Filer cohort.</strong> At each formation a filer enters the cohort if it has a report current at t for both quarters compared and holds at least 10 positions in each (fewer than 10 removes about 618 filers a formation).</p>
+<p><strong>Index-like filers.</strong> Passive managers, index funds and their advisers hold most of an index and change holdings when the index changes or when money flows in or out, not because of a view on a stock. Their entries and exits would add mechanical noise to a count of holders. 13F does not say which managers are passive, so a proxy is used: at each formation, a filer is index-like if it is in the top third of filers by number of positions and the bottom third by turnover. Turnover is the share of positions held in only one of the two quarters, (n(q-1) + n(q) - 2 n(both)) / (n(q-1) + n(q) - n(both)), counted by CUSIP so that no prices are needed. The rule removes about 509 filers per formation, 9.4% of filers but 51.8% of 13F dollar value: the largest have thousands of positions and keep about nine in ten from one quarter to the next. Because F1 counts each filer once, the signal loses a tenth of its holders, not half. A manager that files one report for both its active and passive books is classified as a whole.</p>
 <p><strong>Identity acceptance.</strong> A stock’s CUSIP-to-ticker mapping is accepted at t only if most of its quarter-q cohort holders report a value per share between 0.5 and 2 times Tiingo’s raw close at quarter end (the last close within 7 days). A reused ticker or a units error fails this test.</p>
 <p><strong>Suspected CUSIP changes.</strong> Corporate actions such as a share-class change or a merger can move a company to a new CUSIP that maps to a different FIGI. Holders switching to the new CUSIP then look like hundreds of new holders. A stock with at least 20 quarter-q cohort holders of which more than half are new is excluded from the universe for that formation. Before this rule, the largest F1 values were such events (GOOGL in 2016, RTX in 2020, GE in 2021, BLK in 2025).</p>
 <p><strong>Stale prices.</strong> Vendors can keep publishing a price for a stock that no longer trades: after a takeover, a delisting or a long halt, the close stays frozen and the volume is zero. Such a stock looks liquid on its old history but cannot be traded. The universe therefore requires positive dollar volume on at least 90% of the previous 63 trading days.</p>
@@ -2569,7 +2590,7 @@ vertical-align: -.125em;
 </div>
 </div>
 </div>
-<p>The pipeline is a <code>targets</code> graph, run with <code>targets::tar_make()</code>; targets reruns only what changed. The first target runs the unit tests and the data layers depend on it, so nothing is downloaded or pinned while a test fails. A new SEC batch is added by setting <code>window_end</code> in <code>_targets.R</code>; bronze records the window it covered, and the Tiingo cache must be refreshed because adjusted prices change after every split and dividend.</p>
+<p>The pipeline is a <code>targets</code> graph, run with <code>targets::tar_make()</code>; targets reruns only what changed. The first target runs the unit tests, and the SEC, OpenFIGI and Tiingo downloads and every later layer depend on it, so none of them runs while a test fails. Two small steps do not wait for the tests: the listing of SEC archives and the Fama-French factor download. A new SEC batch is added by setting <code>window_end</code> in <code>_targets.R</code>; bronze records the window it covered, and the Tiingo cache must be refreshed because adjusted prices change after every split and dividend.</p>
 <p><strong>Pins and duckdb.</strong> Every table is a versioned pin on a local board. Its metadata records the versions of the pins it was built from and the counts its checks measured, so every number in this report can be traced to its inputs (Appendix A). The large tables (82,733,424 holdings state rows, 27,576,106 daily prices) are written as parquet and processed in <code>duckdb</code> with a memory limit and spill to disk; only aggregates are loaded into R.</p>
 </section>
 <section id="the-backtest-engine-factorverse" class="level2" data-number="2.7">
@@ -2649,14 +2670,15 @@ vertical-align: -.125em;
 </div>
 <p>Backtests are bundled with <code>create_port_backtest_cohort()</code>. A <code>port_backtest_cohort</code> aligns the returns, costs and metrics of all its backtests. Every cohort of this study is pinned whole, so a reader can inspect it with factoRverse’s own methods:</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>board <span class="ot">&lt;-</span> pos13f<span class="sc">::</span><span class="fu">init_pipeline_board</span>(<span class="st">&quot;data/prod&quot;</span>)</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> pins<span class="sc">::</span><span class="fu">pin_read</span>(board, <span class="st">&quot;backtests_cohort_f1_breadth_change_cs_unconditional&quot;</span>)</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>q5 <span class="ot">&lt;-</span> cohort<span class="sc">@</span>port_backtest_results_list[[<span class="dv">5</span>]]   <span class="co"># the top F1 quintile</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(q5, <span class="at">summary_id =</span> <span class="st">&quot;Transactions Log&quot;</span>)    <span class="co"># every trade and its cost</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(q5, <span class="at">plot_id =</span> <span class="st">&quot;Time-Series of Port Returns&quot;</span>)</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(cohort, <span class="at">plot_id =</span> <span class="st">&quot;Time-Series of Raw Returns&quot;</span>)        <span class="co"># the five quintiles</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(cohort, <span class="at">plot_id =</span> <span class="st">&quot;Time-Series of Port Metrics&quot;</span>)       <span class="co"># weighted F1 and liquidity</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">load_all</span>()   <span class="co"># the package runs in place, it is not installed</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>board <span class="ot">&lt;-</span> <span class="fu">init_pipeline_board</span>(<span class="st">&quot;data/prod&quot;</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>cohort <span class="ot">&lt;-</span> pins<span class="sc">::</span><span class="fu">pin_read</span>(board, <span class="st">&quot;backtests_cohort_f1_breadth_change_cs_unconditional&quot;</span>)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>q5 <span class="ot">&lt;-</span> cohort<span class="sc">@</span>port_backtest_results_list[[<span class="dv">5</span>]]   <span class="co"># the top F1 quintile</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(q5, <span class="at">summary_id =</span> <span class="st">&quot;Transactions Log&quot;</span>)    <span class="co"># every trade and its cost</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(q5, <span class="at">plot_id =</span> <span class="st">&quot;Time-Series of Port Returns&quot;</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(cohort, <span class="at">plot_id =</span> <span class="st">&quot;Time-Series of Raw Returns&quot;</span>)        <span class="co"># the five quintiles</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(cohort, <span class="at">plot_id =</span> <span class="st">&quot;Time-Series of Port Metrics&quot;</span>)       <span class="co"># weighted F1 and liquidity</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <p>The top quintile’s transactions log holds one table per rebalance, 155,745 rows in all, one per stock and rebalance. Its first rows:</p>
 <div class="cell">
@@ -2756,7 +2778,7 @@ vertical-align: -.125em;
 <p><strong>Roles.</strong> The author designed the research question, the architecture (medallion layers, pins, <code>targets</code>, the factoRverse integration) and the workflow, made every methodological decision, and implemented parts of the code. Claude Code wrote most of the remaining code and tests under that direction; Codex reviewed each pull request independently. Every merge was the author’s decision.</p>
 <p><strong>Test-driven development.</strong> Functions are small, one per file, and written with their tests. The unit suite has over 300 tests. Fixtures are real data samples rather than invented rows: <code>toy_bronze_sec.rds</code> holds 32 real filers with forced edge cases (amendment chains, late reports), and <code>toy_silver_gold.rds</code> holds 22 real instruments and 400 filers over three formations, on which the gold SQL, the <code>dplyr</code> recomputations and the factoRverse backtests all run. Each data-quality suite also has tests that break its input on purpose and expect it to fail.</p>
 <p><strong>Style and lint.</strong> Code follows the tidyverse style, is formatted with <code>styler</code> and checked with <code>lintr</code> (100-character lines, snake case, explicit namespaces), and must be lint-free before any commit.</p>
-<p><strong>Continuous integration.</strong> GitHub Actions runs <code>R CMD check</code> and the unit suite on a clean Ubuntu machine on every push and pull request, installing factoRverse from the copy in <code>vendor/</code>. No keys or data are needed.</p>
+<p><strong>Continuous integration.</strong> GitHub Actions runs <code>R CMD check</code> and the unit suite on a clean Ubuntu machine on every pull request and every push to main, installing factoRverse from the copy in <code>vendor/</code>. No keys or data are needed.</p>
 <p><strong>Reproducibility.</strong> <code>renv.lock</code> fixes every package version, factoRverse included; a fresh clone restores with <code>renv::restore()</code>. <code>targets</code> records what was built from what, and pins record lineage and check results.</p>
 <p><strong>Logging.</strong> Each data-quality suite runs through <code>run_logged_test()</code>, which writes a timestamped log under <code>logs/tests/</code> and returns pass or fail; on failure the step stops before pinning. Long functions report progress when <code>verbose = TRUE</code>; pin metadata stores the counts each check measured; <code>targets</code> keeps timing and errors per target. API keys are read from the user environment and never printed or logged.</p>
 <p><strong>Git workflow and review.</strong> Every change goes through a feature branch, small commits with conventional messages, and a pull request. Each review finding is classified (accepted, accepted with modification, rejected) and fixed in its own commit. Examples of findings fixed this way: an overlap rule that read links from superseded filings, and a monotonicity test with the wrong null hypothesis.</p>
@@ -2832,11 +2854,11 @@ vertical-align: -.125em;
 </section>
 <section id="f1-f1b-and-f1c" class="level2" data-number="4.3">
 <h2 data-number="4.3" class="anchored" data-anchor-id="f1-f1b-and-f1c"><span class="header-section-number">4.3</span> F1, F1b and F1c</h2>
-<p>F1 follows the paper. At each formation it counts the cohort filers holding a stock in quarters q-1 and q and divides the change by the cohort size. The only difference is the denominator: the paper divides by all funds at q-1 and this study by the filers present in both quarters; both are the same number for every stock in a formation, so the rankings are identical. Because the denominator is the same for every stock, F1 is a change in holder counts, and its extremes are widely held stocks: a small company cannot gain 800 holders in a quarter. Two extensions measure the same idea without that size effect, each as a separate trial: F1b, the change in ownership measured by value, and F1c, the net number of new holders divided by the stock’s own holders at q-1.</p>
+<p>F1 follows the paper. At each formation it counts the cohort filers holding a stock in quarters q-1 and q and divides the change by the cohort size. The only difference is the denominator: the paper divides by all funds at q-1 and this study by the filers present in both quarters. Either way the denominator is the same for every stock in a formation, so the rankings are identical, and F1 ranks stocks by the change in their holder count. Its extremes are therefore widely held stocks: a small company cannot gain 800 holders in a quarter. Two extensions measure the same idea without that size effect, each as a separate trial: F1b, the change in ownership measured by value, and F1c, the net number of new holders divided by the stock’s own holders at q-1.</p>
 </section>
 <section id="evaluation-framework" class="level2" data-number="4.4">
 <h2 data-number="4.4" class="anchored" data-anchor-id="evaluation-framework"><span class="header-section-number">4.4</span> Evaluation framework</h2>
-<p>The hypotheses, definitions and decision rules were written before any return was computed (memo, Sections 3 and 8), and every later change is dated in the memo. The evaluation uses:</p>
+<p>The hypotheses, definitions and decision rules were written before any return was computed, in <code>docs/factor_memo_draft.md</code> (hypothesis in its Section 3, decision rules in Section 8), and every later change is dated in that document’s Deviations section. The evaluation uses:</p>
 <ul>
 <li><strong>FF6 alpha.</strong> The monthly spread is regressed on the Fama-French five factors and momentum (UMD), with Newey and West (1987) standard errors at lags 3 and 6. UMD is included because institutions trade with past returns, so F1 could be momentum in disguise.</li>
 <li><strong>Conditioning on momentum.</strong> A dependent double sort: stocks are split into momentum terciles and F1 quintiles are formed within each tercile, which asks whether F1 predicts returns among stocks with similar momentum.</li>
@@ -2845,6 +2867,7 @@ vertical-align: -.125em;
 <li><strong>Weighting robustness.</strong> A credible signal must work under cs, equal weights and risk parity, and not only through small, illiquid stocks. A scheme is never selected.</li>
 <li><strong>Multiple testing.</strong> Once F1b and F1c are tested, the false discovery rate is controlled with Benjamini and Hochberg (1995) across the three signals, and the Sharpe ratio is deflated for the number of trials (Bailey and Lopez de Prado 2014).</li>
 <li><strong>Costs.</strong> Net results at fees of 10, 25 and 50 bps and the break-even fee.</li>
+<li><strong>Benchmarks.</strong> The long-short spread is a zero-investment portfolio, so it is judged against zero and against the factors. The long legs are compared with SPY, the market a US equity investor holds by default, and with an equal-weight portfolio of the whole universe, which shows what any portfolio drawn from the same 1,000 stocks earned.</li>
 </ul>
 </section>
 </section>
@@ -2856,7 +2879,7 @@ vertical-align: -.125em;
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
-<p><img role="img" src="data:image/png;base64,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" class="img-fluid figure-img" width="720"></p>
+<p><img role="img" src="data:image/png;base64,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" class="img-fluid figure-img" width="720"></p>
 <figcaption>Filers per report quarter (one original report each) and amendments.</figcaption>
 </figure>
 </div>
@@ -3306,6 +3329,47 @@ vertical-align: -.125em;
 </div>
 </div>
 <p>All three F1 spreads end positive, with long flat stretches and a strong final two years. No FF6 alpha is significant (summary table): the t-statistics are 1.06 (cs), 0.94 (equal weights) and 0.41 (risk parity). The terminal-stress scenario raises the spread to 4.88% a year, because stocks that stop trading are more often in the bottom quintile.</p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 42%">
+<col style="width: 21%">
+<col style="width: 36%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Portfolio (gross, long only)</th>
+<th style="text-align: right;">Mean, % a year</th>
+<th style="text-align: left;">95% interval of the mean</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">SPY</td>
+<td style="text-align: right;">13.85</td>
+<td style="text-align: left;">[7.45, 20.25]</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Equal-weight universe</td>
+<td style="text-align: right;">12.23</td>
+<td style="text-align: left;">[3.88, 20.58]</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Top F1 quintile, cs</td>
+<td style="text-align: right;">15.94</td>
+<td style="text-align: left;">[6.59, 25.30]</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Bottom F1 quintile, cs</td>
+<td style="text-align: right;">11.46</td>
+<td style="text-align: left;">[2.16, 20.76]</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Over the same months SPY earned 13.85% a year and an equal-weight portfolio of the universe 12.23%. The top F1 quintile earned more than both before costs and the bottom quintile less than both, but the intervals of all four overlap widely.</p>
 </section>
 <section id="costs-and-turnover" class="level2" data-number="5.4">
 <h2 data-number="5.4" class="anchored" data-anchor-id="costs-and-turnover"><span class="header-section-number">5.4</span> Costs and turnover</h2>
@@ -3418,18 +3482,27 @@ vertical-align: -.125em;
 </div>
 </div>
 <p>All values are percent a year. The trading cost scales with the fee, so the net spread falls by the same amount for every 10 bps: from 4.48% gross to 1.71% at 25 bps under cs, and below zero at 50 bps under every scheme. A borrow fee of 100 bps a year on the short leg lowers each net spread by a further 1 percentage point. The fee at which the cs spread earns nothing is 40 bps per dollar traded.</p>
-<p>The cause is turnover. At each rebalance a leg trades about 1.6 times its value: if four fifths of the names change, the leg sells 80 cents and buys 80 cents per dollar it holds. With four rebalances a year and two legs, a 25 bps fee costs about 3% a year. Turnover is a property of the signal, not of the rebalancing rule: F1’s rank correlation between consecutive formations averages 0.11, so most of each quintile is replaced every quarter. A smoother signal, such as F1 averaged over two quarters, should keep more of the ranking from one formation to the next and cut the cost in proportion; that is the first cost extension.</p>
+<p>The cause is turnover. Under cs weights the bottom leg trades 1.47 times its value at each rebalance and the top leg 1.30 times, counting purchases and sales: a leg that sells 65 cents and buys 65 cents per dollar it holds trades 1.3 times its value. With four rebalances a year and two legs, a 25 bps fee then costs close to 3% a year. Turnover depends on the weighting scheme and on how far weights drift between rebalances, but mostly on the signal: F1’s rank correlation between consecutive formations averages 0.11, so rankings change a lot from one quarter to the next. A signal averaged over two quarters may keep more of each quintile and trade less; that is a hypothesis for the cost extension, not a result.</p>
 </section>
 <section id="conditional-on-momentum" class="level2" data-number="5.5">
 <h2 data-number="5.5" class="anchored" data-anchor-id="conditional-on-momentum"><span class="header-section-number">5.5</span> Conditional on momentum</h2>
 <div class="cell">
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 23%">
+<col style="width: 16%">
+<col style="width: 8%">
+<col style="width: 11%">
+<col style="width: 5%">
+</colgroup>
 <thead>
 <tr class="header">
 <th style="text-align: left;">Momentum tercile</th>
 <th style="text-align: right;">F1 spread, % a year</th>
 <th style="text-align: right;">Volatility, %</th>
+<th style="text-align: right;">Sharpe</th>
 <th style="text-align: right;">FF6 alpha</th>
 <th style="text-align: right;">t</th>
 </tr>
@@ -3439,6 +3512,7 @@ vertical-align: -.125em;
 <td style="text-align: left;">Low momentum</td>
 <td style="text-align: right;">1.84</td>
 <td style="text-align: right;">10.97</td>
+<td style="text-align: right;">0.17</td>
 <td style="text-align: right;">1.47</td>
 <td style="text-align: right;">0.64</td>
 </tr>
@@ -3446,6 +3520,7 @@ vertical-align: -.125em;
 <td style="text-align: left;">Middle</td>
 <td style="text-align: right;">2.41</td>
 <td style="text-align: right;">9.52</td>
+<td style="text-align: right;">0.25</td>
 <td style="text-align: right;">2.11</td>
 <td style="text-align: right;">0.91</td>
 </tr>
@@ -3453,14 +3528,31 @@ vertical-align: -.125em;
 <td style="text-align: left;">High momentum</td>
 <td style="text-align: right;">5.93</td>
 <td style="text-align: right;">14.83</td>
+<td style="text-align: right;">0.40</td>
 <td style="text-align: right;">3.57</td>
 <td style="text-align: right;">1.25</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Average of the three</td>
+<td style="text-align: right;">3.39</td>
+<td style="text-align: right;">9.13</td>
+<td style="text-align: right;">0.37</td>
+<td style="text-align: right;">2.38</td>
+<td style="text-align: right;">1.44</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Momentum spread (reference)</td>
+<td style="text-align: right;">5.22</td>
+<td style="text-align: right;">24.73</td>
+<td style="text-align: right;">0.21</td>
+<td style="text-align: right;">1.19</td>
+<td style="text-align: right;">0.39</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
-<p>The table repeats the F1 sort inside each momentum tercile: within stocks with similar past returns, it compares those with the largest and smallest breadth change. F1 earns a positive spread in all three terciles and the spread grows with momentum, from 1.84% a year among past losers to 5.93% among past winners. Rising breadth is therefore most informative among stocks that have already risen, which fits the trend reading of the signal. None of the three is significant on its own, and neither is their average (3.39% a year, alpha t = 1.44).</p>
+<p>The table repeats the F1 sort inside each momentum tercile: within stocks with similar past returns, it compares those with the largest and smallest breadth change. F1 earns a positive spread in all three terciles and the spread grows with momentum, from 1.84% a year among past losers to 5.93% among past winners, where it reaches a Sharpe ratio of 0.40 and an FF6 alpha of 3.57% a year. Averaged over the terciles it has a Sharpe ratio of 0.37, above both the unconditional F1 spread (0.29) and the momentum spread (0.21), and the alpha closest to significance of all the tests. Rising breadth among stocks that have already risen is what the gradual-trend reading of F1 predicts. Still, none of the three spreads is significant on its own, and the winners tercile is one of three, noticed after seeing results, so it is a hypothesis for a new pre-registered trial rather than a finding. Neither is the average significant (3.39% a year, alpha t = 1.44).</p>
 <div class="cell">
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
@@ -3501,7 +3593,7 @@ vertical-align: -.125em;
 </table>
 </div>
 </div>
-<p>Does F1 improve a momentum portfolio? The two spreads have a correlation of 0.86, so most of F1’s return is a momentum return; this is why its FF6 alpha, which controls for momentum, is about half its raw spread. Holding half of each gives a Sharpe ratio of 0.25, between momentum alone (0.21) and F1 alone (0.29). F1 is a less volatile way to hold a similar bet, not a separate source of return. This comparison is descriptive and gross of costs, not one of the pre-registered tests.</p>
+<p>Does F1 improve a momentum portfolio? The unconditional spreads move together (their monthly returns have a correlation of 0.86), yet adding F1 helps a momentum investor: holding half of each gives a Sharpe ratio of 0.25 against 0.21 for momentum alone, because F1 earns most of momentum’s return with less volatility (15.7% against 24.7%). F1 alone has the higher Sharpe ratio still (0.29). This comparison is descriptive and gross of costs, not one of the pre-registered tests.</p>
 </section>
 <section id="momentum-over-the-same-period" class="level2" data-number="5.6">
 <h2 data-number="5.6" class="anchored" data-anchor-id="momentum-over-the-same-period"><span class="header-section-number">5.6</span> Momentum over the same period</h2>
@@ -3557,10 +3649,11 @@ vertical-align: -.125em;
 <section id="limitations" class="level1" data-number="6">
 <h1 data-number="6"><span class="header-section-number">6</span> Limitations</h1>
 <ul>
-<li><strong>Power.</strong> Before seeing any result, the memo set 2% a year as the smallest alpha that would matter economically. With 152 months and a spread this volatile, the test can only detect an effect of about 10.8% a year with 80% probability, so effects of economic interest could be present and undetected. Four times the history would halve that threshold; a less volatile construction lowers it faster.</li>
+<li><strong>Power.</strong> Before seeing any result, the pre-registration set 2% a year as the smallest alpha that would matter economically. With this sample, a true FF6 alpha would have to be about 6.0% a year, and a true mean spread about 10.8%, to be detected with 80% probability, so effects of economic interest could be present and undetected. Four times the history would halve these thresholds.</li>
 <li><strong>Size tilt.</strong> F1’s extremes are widely held stocks and cs weights add liquidity. F1c removes the structural part.</li>
 <li><strong>Sample period.</strong> The whole sample lies after the breadth reversal reported by Nagel (2005).</li>
-<li><strong>Identity mapping.</strong> OpenFIGI and Tiingo reflect today’s mappings; unpriceable holdings are 0.45% of holding value, mostly dead firms.</li>
+<li><strong>Identity mapping.</strong> OpenFIGI and Tiingo reflect today’s mappings: 3.7% of 13F value is common stock with no Tiingo price series and 0.45% is removed by the identity checks, mostly dead firms.</li>
+<li><strong>Confidential treatment.</strong> Withheld positions look like exits until revealed.</li>
 <li><strong>Signal freshness.</strong> Signals are formed at month end, up to two weeks after most filings are public.</li>
 <li><strong>Stocks that go stale after formation</strong> earn zero until the next formation and do not receive the stress return.</li>
 </ul>
@@ -3569,6 +3662,7 @@ vertical-align: -.125em;
 <h1 data-number="7"><span class="header-section-number">7</span> Extensions</h1>
 <ol type="1">
 <li>F1b and F1c, each a separate trial, with false discovery rate control across F1, F1b and F1c and a deflated Sharpe ratio over all trials.</li>
+<li>F1 among past winners, the strongest pattern in the results, pre-registered as a conditional strategy and counted as a new trial.</li>
 <li>Costs: turnover by leg and through time, factoRverse’s market impact model by strategy size, realistic fees and borrow, and F1 smoothed over two quarters.</li>
 <li>Leave-one-year-out and sector checks of the top-quintile premium.</li>
 <li>Disclosure-lag profile: returns in months 1 to 12 after formation.</li>

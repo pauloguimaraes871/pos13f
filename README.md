@@ -27,18 +27,22 @@ definitions and decision rules were written before any return was computed:
 [docs/factor_memo_draft.md](docs/factor_memo_draft.md).
 
 Over 152 months (March 2014 to October 2026), the top-minus-bottom F1 quintile earns
-4.5% a year gross, but its alpha against the Fama-French five factors and momentum is
-not significant (2.25% a year, t = 1.06), it is not profitable after 25 bps trading
-costs and 100 bps borrow, and it is highly correlated with momentum (0.86). The test
-has low power: only an alpha of about 11% a year would have been detected reliably.
-The memo and the report give the full assessment.
+4.5% a year gross. Its alpha against the Fama-French five factors and momentum (151
+months, as the factor data end a month earlier) is 2.25% a year and not significant
+(t = 1.06). After a 25 bps trading fee and 100 bps borrow it earns 0.71% a year, with a
+95% interval of about -6.8% to 8.3%, and its monthly returns have a correlation of 0.86
+with the momentum spread. The test has low power: a true alpha of about 6% a year would
+be detected only four times out of five. The memo and the report give the full
+assessment.
 
 ## Quick start
 
 ```r
 # 1. Restore the package library recorded in renv.lock. factoRverse 0.9.1 (the
 #    backtest engine) is installed from vendor/factoRverse_0.9.1.tar.gz, which the
-#    lockfile records as a local source: no GitHub access or manual step is needed.
+#    lockfile records as a local source. One locked package, ParBayesianOptimization,
+#    is still recorded from GitHub, so a restore without a package cache needs access
+#    to github.com.
 renv::restore()
 
 # 2. Add the three keys to your user-level .Renviron (template: .Renviron.example),
@@ -98,7 +102,9 @@ Data moves through versioned `pins` on a local board in `data/prod`:
   object.
 
 Each step runs its data-quality checks and pins its tables only if all checks pass;
-the first target runs the unit tests, and nothing is downloaded while one fails.
+the first target runs the unit tests, and no SEC, OpenFIGI or Tiingo download or later
+layer runs while one fails (only the SEC archive listing and the Fama-French download do
+not wait for them).
 `targets::tar_visnetwork()` shows the graph.
 
 ## Point-in-time rules
@@ -122,7 +128,8 @@ Every table is a pin, and every factoRverse backtest cohort is pinned whole, so 
 be explored with factoRverse's own methods:
 
 ```r
-board <- pos13f::init_pipeline_board("data/prod")
+devtools::load_all()   # the package is run in place, not installed
+board <- init_pipeline_board("data/prod")
 cohort <- pins::pin_read(board, "backtests_cohort_f1_breadth_change_cs_unconditional")
 plot(cohort, plot_id = "Time-Series of Raw Returns")
 ```
@@ -147,5 +154,6 @@ logs/             data-quality test logs (git-ignored)
 ## Development
 
 `devtools::test()` runs the unit tests, `lintr::lint_package()` the style checks, and
-GitHub Actions runs `R CMD check` on every push and pull request on a clean Ubuntu
+GitHub Actions runs `R CMD check` on every pull request and every push to main on a
+clean Ubuntu
 machine, with no keys or data.

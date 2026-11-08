@@ -41,6 +41,15 @@ mono <- tb$monotonicity
 inf <- tb$inference
 inf_cs <- inf[inf$signal == key & inf$method == "cs" & inf$design == "unconditional", ]
 umd <- tb$momentum$umd
+unc <- tb$uncertainty
+un <- function(tag) unc[unc$series == paste(key, "cs", "unconditional", tag, sep = "|"), ]
+u_gross <- un("spread_0_0")
+u_net <- un("spread_25_100")
+ew_net <- sp("ew", tag = "spread_25_100")
+rp_net <- sp("rp", tag = "spread_25_100")
+exc <- tb$cohort_exclusions
+exc_of <- function(outcome, col) exc[[col]][exc$outcome == outcome]
+conf <- tb$coverage
 dq <- function(pin, field) {
   if (field == "n_rows" && pin %in% tb$file_rows$pin) return(tb$file_rows$n_rows[tb$file_rows$pin == pin])
   tb$data_quality$value[tb$data_quality$pin == pin & tb$data_quality$field == field]
@@ -76,8 +85,10 @@ The question is whether the change in the number of institutions holding a stock
 from Form 13F filings only after they are public, predicts the cross-section of returns
 of liquid US stocks net of trading costs, and whether it adds to price momentum. The
 signal, F1, is the change in breadth of ownership defined by Chen, Hong and Stein
-(2002). The test covers `r months` months (March 2014 to October 2026) and 50 quarterly
-formations, on a universe of about 1,000 liquid stocks.
+(2002). The test covers `r months` months of returns (March 2014 to October 2026) and
+50 quarterly formations, on a universe of about 1,000 liquid stocks. The factor
+regressions use `r u_gross$n_alpha_months` months, because the Fama-French data end one
+month earlier.
 
 The study is an R package with a `targets` pipeline: SEC, Tiingo and OpenFIGI data flow
 through bronze, silver and gold layers stored as versioned `pins`, large tables are
@@ -93,31 +104,61 @@ show <- data.frame(
     "F1 spread, terminal stress", "F1 spread net of 25 bps fee and 100 bps borrow",
     "Momentum spread (reference), cs weights"
   ),
-  rbind(cs, ew, rp, ds, stress, cs_net, mom)[, c("ann_return", "ann_vol", "ann_alpha", "alpha_t")]
+  rbind(cs, ew, rp, ds, stress, cs_net, mom)[, c("ann_return", "ann_vol")]
 )
+rows <- rbind(cs, ew, rp, ds, stress, cs_net, mom)
+capm <- tb$capm[match(rows$series, tb$capm$series), ]
+show$capm <- capm$capm_alpha
+show$capm_t <- capm$capm_t
+show$ff6 <- rows$ann_alpha
+show$ff6_t <- rows$alpha_t
 show$CI <- c(ci(cs), ci(ew), ci(rp), ci(ds), ci(stress), ci(cs_net), ci(mom))
-names(show) <- c("Test", "Mean, % a year", "Volatility, %", "FF6 alpha, % a year", "Alpha t (NW 3)", "95% CI of alpha")
+names(show) <- c(
+  "Test", "Mean, % a year", "Volatility, %", "CAPM alpha", "t", "FF6 alpha", "t",
+  "95% CI of FF6 alpha"
+)
 knitr::kable(show, digits = 2, row.names = FALSE)
 ```
 
 Each row is a long-short portfolio: long the stocks in the top F1 quintile, short those
-in the bottom quintile, rebalanced every quarter. "FF6 alpha" is the intercept of a
-regression of the monthly spread on the five Fama-French factors and momentum (UMD),
-with Newey-West standard errors.
+in the bottom quintile, rebalanced every quarter. Three weighting schemes are used: cs
+weights each stock by its signal score times a liquidity score (the pre-registered
+scheme), ew gives equal weights and rp uses risk parity. "FF6 alpha" is the intercept of
+a regression of the monthly spread on the five Fama-French factors and the momentum
+factor UMD (up minus down), and "CAPM alpha" the intercept of a regression on the market
+factor alone; t-statistics and intervals use Newey-West standard errors with 3 lags.
+
+All alphas are estimated on `r u_gross$n_alpha_months` months, because the Fama-French
+data end in September 2026, while the means use all `r months` months. The month left
+out, October 2026, was the worst of the sample: the cs F1 spread lost
+`r f(-tb$spreads$gross_return[tb$spreads$signal == key & tb$spreads$method == "cs" & tb$spreads$design == "unconditional" & tb$spreads$cost_bps == 0 & tb$spreads$borrow_bps == 0 & tb$spreads$dates == max(tb$spreads$dates)], 1)`%
+and the momentum spread
+`r f(-tb$spreads$gross_return[tb$spreads$signal == "mom_12_1" & tb$spreads$design == "reference" & tb$spreads$cost_bps == 0 & tb$spreads$borrow_bps == 0 & tb$spreads$dates == max(tb$spreads$dates)], 1)`%.
+On the common months the alphas are therefore higher than they would be with October
+included. The CAPM alpha removes only the market; the legs have almost equal market
+betas, so it differs from the mean mainly through that missing month, and the gap
+between the CAPM and FF6 alphas shows what the other five factors explain.
 
 The pre-registered verdicts are:
 
 1. **Predictive content: no evidence.** The FF6 alpha of the F1 spread is
    `r f(cs$ann_alpha)`% a year with a 95% interval of `r ci(cs)`, and the mean rank
-   information coefficient is `r f(ic$mean_ic, 3)` (t = `r f(ic$t_ic)`). An interval that
-   includes zero is not a rejection: with this sample, only an effect of about
-   `r f(inf_cs$mde_ann, 1)`% a year would have been detected reliably.
-2. **Economic viability: not viable.** At a fee of 25 bps per dollar traded and a borrow
-   fee of 100 bps a year, the spread earns `r f(cs_net$ann_return)`% a year under cs
-   weights and less under the other schemes.
-3. **Incremental to momentum: not shown.** F1 earns a positive spread in every momentum
-   tercile, averaging `r f(ds$ann_return)`% a year, but the interval includes zero, and
-   the F1 and momentum spreads have a correlation of `r f(tb$combination$correlation)`.
+   information coefficient (IC, the rank correlation between F1 and the next quarter's
+   returns) is `r f(ic$mean_ic, 3)` (t = `r f(ic$t_ic)`). An interval that includes zero
+   is not a rejection: with this sample, a true alpha of about
+   `r f(u_gross$mde_alpha_ann, 1)`% a year would be detected only four times out of five.
+2. **Economic viability: viable on the point estimate under cs only, with a wide
+   interval.** At a fee of 25 bps per dollar traded and a borrow fee of 100 bps a year,
+   the cs spread earns `r f(u_net$ann_return)`% a year, 95% interval
+   [`r f(u_net$ann_return_lo)`, `r f(u_net$ann_return_hi)`]. The pre-registered rule
+   calls a positive net return viable, with its interval reported. The interval includes
+   zero, and the same spread earns `r f(ew_net$ann_return)`% under ew and
+   `r f(rp_net$ann_return)`% under rp.
+3. **Incremental to momentum: positive in direction, not significant.** Within each
+   momentum tercile F1 still earns a positive spread, `r f(ds$ann_return)`% a year on
+   average with the highest Sharpe ratio of any test (`r f(ds$sharpe)`), but its alpha
+   interval `r ci(ds)` includes zero, so the pre-registered verdict is "not shown"
+   (Section 5.5).
 
 Momentum itself was weak in this window: UMD averaged `r f(umd$ann_mean[1])`% a year
 (t = `r f(umd$t_mean[1])`) against `r f(umd$ann_mean[2])`% since 1963. The results are
@@ -164,8 +205,10 @@ service, was used to map each share CUSIP to a composite FIGI and a ticker. The
 composite FIGI is the permanent `instrument_id` from silver on, and the ticker links to
 Tiingo. OpenFIGI answers with today's mapping, so a ticker reused later by another
 company could attach the wrong prices. This is guarded by an implied-price check
-(Section 2.4) and measured: holdings that cannot be priced are 0.45% of 13F holding
-value, mostly dead firms.
+(Section 2.4). Of 13F holding value, 71.7% is priced; 24.2% is not US common stock or
+has no mapping (ETFs, ADRs and funds, out of scope); 3.7% is common stock with no Tiingo
+price series; and 0.45% is removed by the identity checks (0.34% on tickers shared with
+a later company, 0.11% where the holders' prices disagree with Tiingo).
 
 **Kenneth French data library.** Monthly Fama-French five factors and momentum (UMD),
 pinned in bronze so that a rerun does not depend on the library being online.
@@ -280,8 +323,9 @@ only returns dated before the formation.
 
 **Two remaining sources of look-ahead are about identity, not timing.** OpenFIGI and
 Tiingo map securities as of today, so a company whose ticker was later reused may be
-priced wrongly or not at all; the implied-price check rejects most such cases and the
-unpriced share is 0.45% of holding value. And CUSIPs that map to more than one
+priced wrongly or not at all; the implied-price check rejects most such cases, and the
+holdings removed this way are 0.45% of 13F value, mostly dead firms. Removing them uses
+later information, a small survivorship effect. And CUSIPs that map to more than one
 instrument over the whole sample are removed from the security master
 (`r n0(dq("silver_security_master", "n_ambiguous_cusips"))` CUSIPs), a decision that uses
 the full history. Both are disclosed rather than corrected.
@@ -291,9 +335,10 @@ the full history. Both are disclosed rather than corrected.
 **Duplicated rows within a filing.** A 13F filing can report the same CUSIP on several
 INFOTABLE rows, one for each other manager or investment-discretion category. These rows
 are parts of one position, so they are summed into a single position per filing and
-CUSIP. Positions are never summed across filings: across versions of the same report,
-only the version current at t counts, so an amended report replaces the original
-instead of being added to it. A filer that holds two CUSIPs of the same instrument (for
+CUSIP. Across filings, the amendment type decides: a RESTATEMENT replaces the report
+from its usable date, and a NEW HOLDINGS amendment adds its positions to the report
+from its own usable date (a position reported in both is summed). At date t only the
+filings usable by t count. A filer that holds two CUSIPs of the same instrument (for
 example two share lines mapped to one FIGI) counts once as a holder of that instrument.
 
 **Overlapping managers.** When a filer's report lists another manager as included in it
@@ -302,10 +347,34 @@ counted twice. The smaller of the two reports, by number of positions, is remove
 the cohort for that formation; the inclusion links are read only from the report
 versions current at t, for both quarters compared.
 
+**Confidential treatment.** A manager may ask the SEC to withhold a position for up to
+a year, usually while it is still building it, and declares on the cover page that
+positions were omitted. About `r n0(round(mean(conf$n_confidential)))` original reports
+a quarter carry this declaration (the field is blank on many older filings). A withheld
+position is revealed later by an amendment, which enters only from its own usable
+date, so nothing withheld is used before it is public. The cost is the other direction:
+until it is revealed, a withheld position looks like an exit or a missing initiation,
+which biases F1 down for the stocks such managers buy. The study does not correct for
+this.
+
 **Filer cohort.** At each formation a filer enters the cohort if it has a report current
-at t for both quarters compared, holds at least 10 positions in each, and is not
-index-like (top third by number of positions and bottom third by turnover, recomputed
-at every formation).
+at t for both quarters compared and holds at least 10 positions in each (fewer than 10
+removes about `r n0(round(exc_of("few_positions", "mean_filers")))` filers a formation).
+
+**Index-like filers.** Passive managers, index funds and their advisers hold most of an
+index and change holdings when the index changes or when money flows in or out, not
+because of a view on a stock. Their entries and exits would add mechanical noise to a
+count of holders. 13F does not say which managers are passive, so a proxy is used: at
+each formation, a filer is index-like if it is in the top third of filers by number of positions and
+the bottom third by turnover. Turnover is the share of positions held in only one of
+the two quarters, (n(q-1) + n(q) - 2 n(both)) / (n(q-1) + n(q) - n(both)), counted by
+CUSIP so that no prices are needed. The rule removes about
+`r n0(round(exc_of("index_like", "mean_filers")))` filers per formation,
+`r pct(exc_of("index_like", "share_filers"))` of filers but
+`r pct(exc_of("index_like", "share_value"))` of 13F dollar value: the largest have
+thousands of positions and keep about nine in ten from one quarter to the next. Because
+F1 counts each filer once, the signal loses a tenth of its holders, not half. A manager
+that files one report for both its active and passive books is classified as a whole.
 
 **Identity acceptance.** A stock's CUSIP-to-ticker mapping is accepted at t only if most
 of its quarter-q cohort holders report a value per share between 0.5 and 2 times
@@ -382,8 +451,10 @@ ggplot() +
 ```
 
 The pipeline is a `targets` graph, run with `targets::tar_make()`; targets reruns only
-what changed. The first target runs the unit tests and the data layers depend on it, so
-nothing is downloaded or pinned while a test fails. A new SEC batch is added by setting
+what changed. The first target runs the unit tests, and the SEC, OpenFIGI and Tiingo
+downloads and every later layer depend on it, so none of them runs while a test fails.
+Two small steps do not wait for the tests: the listing of SEC archives and the
+Fama-French factor download. A new SEC batch is added by setting
 `window_end` in `_targets.R`; bronze records the window it covered, and the Tiingo cache
 must be refreshed because adjusted prices change after every split and dividend.
 
@@ -452,7 +523,8 @@ aligns the returns, costs and metrics of all its backtests. Every cohort of this
 is pinned whole, so a reader can inspect it with factoRverse's own methods:
 
 ```{r fv-example, echo = TRUE, eval = FALSE}
-board <- pos13f::init_pipeline_board("data/prod")
+devtools::load_all()   # the package runs in place, it is not installed
+board <- init_pipeline_board("data/prod")
 cohort <- pins::pin_read(board, "backtests_cohort_f1_breadth_change_cs_unconditional")
 q5 <- cohort@port_backtest_results_list[[5]]   # the top F1 quintile
 
@@ -499,7 +571,8 @@ checked with `lintr` (100-character lines, snake case, explicit namespaces), and
 lint-free before any commit.
 
 **Continuous integration.** GitHub Actions runs `R CMD check` and the unit suite on a
-clean Ubuntu machine on every push and pull request, installing factoRverse from the
+clean Ubuntu machine on every pull request and every push to main, installing
+factoRverse from the
 copy in `vendor/`. No keys or data are needed.
 
 **Reproducibility.** `renv.lock` fixes every package version, factoRverse included; a
@@ -611,9 +684,9 @@ of the information may be in prices.
 F1 follows the paper. At each formation it counts the cohort filers holding a stock in
 quarters q-1 and q and divides the change by the cohort size. The only difference is the
 denominator: the paper divides by all funds at q-1 and this study by the filers present
-in both quarters; both are the same number for every stock in a formation, so the
-rankings are identical. Because the denominator is the same for every stock, F1 is a
-change in holder counts, and its extremes are widely held stocks: a small company cannot
+in both quarters. Either way the denominator is the same for every stock in a
+formation, so the rankings are identical, and F1 ranks stocks by the change in their
+holder count. Its extremes are therefore widely held stocks: a small company cannot
 gain 800 holders in a quarter. Two extensions measure the same idea without that size
 effect, each as a separate trial: F1b, the change in ownership measured by value, and
 F1c, the net number of new holders divided by the stock's own holders at q-1.
@@ -621,8 +694,9 @@ F1c, the net number of new holders divided by the stock's own holders at q-1.
 ## Evaluation framework
 
 The hypotheses, definitions and decision rules were written before any return was
-computed (memo, Sections 3 and 8), and every later change is dated in the memo. The
-evaluation uses:
+computed, in `docs/factor_memo_draft.md` (hypothesis in its Section 3, decision rules
+in Section 8), and every later change is dated in that document's Deviations section.
+The evaluation uses:
 
 - **FF6 alpha.** The monthly spread is regressed on the Fama-French five factors and
   momentum (UMD), with Newey and West (1987) standard errors at lags 3 and 6. UMD is
@@ -642,6 +716,11 @@ evaluation uses:
   controlled with Benjamini and Hochberg (1995) across the three signals, and the
   Sharpe ratio is deflated for the number of trials (Bailey and Lopez de Prado 2014).
 - **Costs.** Net results at fees of 10, 25 and 50 bps and the break-even fee.
+- **Benchmarks.** The long-short spread is a zero-investment portfolio, so it is judged
+  against zero and against the factors. The long legs are compared with SPY, the market
+  a US equity investor holds by default, and with an equal-weight portfolio of the
+  whole universe, which shows what any portfolio drawn from the same 1,000 stocks
+  earned.
 
 # Results
 
@@ -791,6 +870,23 @@ years. No FF6 alpha is significant (summary table): the t-statistics are
 parity). The terminal-stress scenario raises the spread to `r f(stress$ann_return)`% a
 year, because stocks that stop trading are more often in the bottom quintile.
 
+```{r benchmarks}
+bench_rows <- c(
+  "spy", "ew_universe",
+  paste(key, "cs", "unconditional", c("q5", "q1"), sep = "|")
+)
+bt <- unc[match(bench_rows, unc$series), ]
+bt$name <- c("SPY", "Equal-weight universe", "Top F1 quintile, cs", "Bottom F1 quintile, cs")
+bt$interval <- paste0("[", f(bt$ann_return_lo), ", ", f(bt$ann_return_hi), "]")
+knitr::kable(bt[, c("name", "ann_return", "interval")], digits = 2, row.names = FALSE,
+  col.names = c("Portfolio (gross, long only)", "Mean, % a year", "95% interval of the mean"))
+```
+
+Over the same months SPY earned `r f(unc$ann_return[unc$series == "spy"])`% a year and an
+equal-weight portfolio of the universe `r f(unc$ann_return[unc$series == "ew_universe"])`%.
+The top F1 quintile earned more than both before costs and the bottom quintile less
+than both, but the intervals of all four overlap widely.
+
 ## Costs and turnover
 
 ```{r turnover}
@@ -812,15 +908,18 @@ under cs, and below zero at 50 bps under every scheme. A borrow fee of 100 bps a
 on the short leg lowers each net spread by a further 1 percentage point. The fee at
 which the cs spread earns nothing is `r f(inf_cs$breakeven_bps, 0)` bps per dollar traded.
 
-The cause is turnover. At each rebalance a leg trades about
-`r f(mean(tv$traded_per_rebalance), 1)` times its value: if four fifths of the names
-change, the leg sells 80 cents and buys 80 cents per dollar it holds. With four
-rebalances a year and two legs, a 25 bps fee costs about 3% a year. Turnover is a
-property of the signal, not of the rebalancing rule: F1's rank correlation between
-consecutive formations averages `r f(mean(pers$rank_autocorrelation))`, so most of each
-quintile is replaced every quarter. A smoother signal, such as F1 averaged over two
-quarters, should keep more of the ranking from one formation to the next and cut the
-cost in proportion; that is the first cost extension.
+The cause is turnover. Under cs weights the bottom leg trades
+`r f(tv$traded_per_rebalance[tv$method == "cs" & tv$quantile == 1])` times its value at
+each rebalance and the top leg
+`r f(tv$traded_per_rebalance[tv$method == "cs" & tv$quantile == 5])` times, counting
+purchases and sales: a leg that sells 65 cents and buys 65 cents per dollar it holds
+trades 1.3 times its value. With four rebalances a year and two legs, a 25 bps fee then
+costs close to 3% a year. Turnover depends on the weighting scheme and on how far
+weights drift between rebalances, but mostly on the signal: F1's rank correlation
+between consecutive formations averages `r f(mean(pers$rank_autocorrelation))`, so
+rankings change a lot from one quarter to the next. A signal averaged over two quarters
+may keep more of each quintile and trade less; that is a hypothesis for the cost
+extension, not a result.
 
 ## Conditional on momentum
 
@@ -828,8 +927,11 @@ cost in proportion; that is the first cost extension.
 ter <- s[grepl("f1_breadth_change_in_mom_12_1\\|cs\\|tercile_[0-9]\\|spread_0_0", s$series) & s$lag == 3, ]
 ter$Tercile <- c("Low momentum", "Middle", "High momentum")[as.integer(sub(".*tercile_([0-9]).*", "\\1", ter$series))]
 ter <- ter[order(match(ter$Tercile, c("Low momentum", "Middle", "High momentum"))), ]
-knitr::kable(ter[, c("Tercile", "ann_return", "ann_vol", "ann_alpha", "alpha_t")], digits = 2, row.names = FALSE,
-  col.names = c("Momentum tercile", "F1 spread, % a year", "Volatility, %", "FF6 alpha", "t")
+ter_show <- rbind(ter[, c("Tercile", "ann_return", "ann_vol", "sharpe", "ann_alpha", "alpha_t")],
+  data.frame(Tercile = c("Average of the three", "Momentum spread (reference)"),
+    rbind(ds, mom)[, c("ann_return", "ann_vol", "sharpe", "ann_alpha", "alpha_t")]))
+knitr::kable(ter_show, digits = 2, row.names = FALSE,
+  col.names = c("Momentum tercile", "F1 spread, % a year", "Volatility, %", "Sharpe", "FF6 alpha", "t")
 )
 ```
 
@@ -837,9 +939,15 @@ The table repeats the F1 sort inside each momentum tercile: within stocks with s
 past returns, it compares those with the largest and smallest breadth change. F1 earns
 a positive spread in all three terciles and the spread grows with momentum, from
 `r f(ter$ann_return[1])`% a year among past losers to `r f(ter$ann_return[3])`% among
-past winners. Rising breadth is therefore most informative among stocks that have
-already risen, which fits the trend reading of the signal. None of the three is
-significant on its own, and neither is their average (`r f(ds$ann_return)`% a year,
+past winners, where it reaches a Sharpe ratio of `r f(ter$sharpe[3])` and an FF6 alpha
+of `r f(ter$ann_alpha[3])`% a year. Averaged over the terciles it has a Sharpe ratio of
+`r f(ds$sharpe)`, above both the unconditional F1 spread (`r f(cs$sharpe)`) and the
+momentum spread (`r f(mom$sharpe)`), and the alpha closest to significance of all the
+tests. Rising breadth among stocks that have already risen is what the gradual-trend
+reading of F1 predicts. Still, none of the three spreads is significant on its own,
+and the winners tercile is one of three, noticed after seeing results, so it is a
+hypothesis for a new pre-registered trial rather than a finding. Neither is the average
+significant (`r f(ds$ann_return)`% a year,
 alpha t = `r f(ds$alpha_t)`).
 
 ```{r combination}
@@ -848,12 +956,13 @@ knitr::kable(cmb$table, digits = 2, row.names = FALSE,
   col.names = c("Portfolio (gross spreads, cs)", "Return, % a year", "Volatility, %", "Sharpe ratio"))
 ```
 
-Does F1 improve a momentum portfolio? The two spreads have a correlation of
-`r f(cmb$correlation)`, so most of F1's return is a momentum return; this is why its FF6
-alpha, which controls for momentum, is about half its raw spread. Holding half of each
-gives a Sharpe ratio of `r f(cmb$table$sharpe[3])`, between momentum alone
-(`r f(cmb$table$sharpe[1])`) and F1 alone (`r f(cmb$table$sharpe[2])`). F1 is a less
-volatile way to hold a similar bet, not a separate source of return. This comparison is
+Does F1 improve a momentum portfolio? The unconditional spreads move together (their
+monthly returns have a correlation of `r f(cmb$correlation)`), yet adding F1 helps a
+momentum investor: holding half of each gives a Sharpe ratio of
+`r f(cmb$table$sharpe[3])` against `r f(cmb$table$sharpe[1])` for momentum alone, because
+F1 earns most of momentum's return with less volatility
+(`r f(cmb$table$ann_vol[2], 1)`% against `r f(cmb$table$ann_vol[1], 1)`%). F1 alone has
+the higher Sharpe ratio still (`r f(cmb$table$sharpe[2])`). This comparison is
 descriptive and gross of costs, not one of the pre-registered tests.
 
 ## Momentum over the same period
@@ -875,18 +984,20 @@ way.
 
 # Limitations
 
-- **Power.** Before seeing any result, the memo set 2% a year as the smallest alpha
-  that would matter economically. With `r months` months and a spread this volatile,
-  the test can only detect an effect of about `r f(inf_cs$mde_ann, 1)`% a year with 80%
-  probability, so effects of economic interest could be present and undetected. Four
-  times the history would halve that threshold; a less volatile construction lowers it
-  faster.
+- **Power.** Before seeing any result, the pre-registration set 2% a year as the
+  smallest alpha that would matter economically. With this sample, a true FF6 alpha
+  would have to be about `r f(u_gross$mde_alpha_ann, 1)`% a year, and a true mean spread
+  about `r f(u_gross$mde_mean_ann, 1)`%, to be detected with 80% probability, so effects
+  of economic interest could be present and undetected. Four times the history would
+  halve these thresholds.
 - **Size tilt.** F1's extremes are widely held stocks and cs weights add liquidity. F1c
   removes the structural part.
 - **Sample period.** The whole sample lies after the breadth reversal reported by Nagel
   (2005).
-- **Identity mapping.** OpenFIGI and Tiingo reflect today's mappings; unpriceable
-  holdings are 0.45% of holding value, mostly dead firms.
+- **Identity mapping.** OpenFIGI and Tiingo reflect today's mappings: 3.7% of 13F
+  value is common stock with no Tiingo price series and 0.45% is removed by the identity
+  checks, mostly dead firms.
+- **Confidential treatment.** Withheld positions look like exits until revealed.
 - **Signal freshness.** Signals are formed at month end, up to two weeks after most
   filings are public.
 - **Stocks that go stale after formation** earn zero until the next formation and do
@@ -896,12 +1007,14 @@ way.
 
 1. F1b and F1c, each a separate trial, with false discovery rate control across F1, F1b
    and F1c and a deflated Sharpe ratio over all trials.
-2. Costs: turnover by leg and through time, factoRverse's market impact model by
+2. F1 among past winners, the strongest pattern in the results, pre-registered as a
+   conditional strategy and counted as a new trial.
+3. Costs: turnover by leg and through time, factoRverse's market impact model by
    strategy size, realistic fees and borrow, and F1 smoothed over two quarters.
-3. Leave-one-year-out and sector checks of the top-quintile premium.
-4. Disclosure-lag profile: returns in months 1 to 12 after formation.
-5. Activity-based filer split and a capacity-based universe.
-6. Continuous integration on macOS and Windows, with coverage and lint badges.
+4. Leave-one-year-out and sector checks of the top-quintile premium.
+5. Disclosure-lag profile: returns in months 1 to 12 after formation.
+6. Activity-based filer split and a capacity-based universe.
+7. Continuous integration on macOS and Windows, with coverage and lint badges.
 
 # Appendix A: pin lineage {.appendix}
 
