@@ -41,8 +41,13 @@ pers <- tb$persistence
 lad <- tb$ladder[tb$ladder$signal == key & tb$ladder$design == "unconditional", ]
 top3 <- utils::head(tb$extremes[tb$extremes$side == "top", ], 3)
 top3$gain <- top3$n_holders_curr - top3$n_holders_prev
+cmb <- tb$combination
+audit <- tb$audit[!is.na(tb$audit$accepted_date), ]
 library(ggplot2)
-theme_set(theme_minimal(base_size = 9))
+theme_set(theme_minimal(base_size = 9) + theme(
+  panel.grid.minor = element_blank(), panel.grid.major.x = element_blank(),
+  legend.position = "top", legend.justification = "left"
+))
 ```
 
 This memo summarises the full technical report (`report/report.html`), which documents
@@ -71,7 +76,10 @@ prices for live and dead tickers; OpenFIGI maps CUSIPs to permanent identifiers.
 tables) and gold (signals and panels), with a data-quality suite before each pin.
 
 - **Point in time.** A filing is usable the trading day after its filing date; amended
-  reports are versioned so a reader at date t sees only the versions current at t.
+  reports are versioned so a reader at date t sees only the versions current at t, and
+  a late report enters at the first formation after it is public. A random sample of
+  `r nrow(audit)` filings checked against EDGAR's acceptance times confirms that every
+  one was public before the close of its usable date, when the portfolio trades.
 - **Universe.** At each formation (end of February, May, August, November), the 1,000
   most liquid US common stocks with a price above USD 5, a year of history, trading on
   90% of recent days and a confirmed identity.
@@ -110,15 +118,17 @@ knitr::kable(show, digits = 2, row.names = FALSE)
    so each leg trades its full value at every rebalance; the break-even fee is
    `r f(inf_cs$breakeven_bps, 0)` bps.
 3. **Incremental to momentum: not shown.** F1 earns a positive spread in every momentum
-   tercile, averaging `r f(ds$ann_return)`% a year, but the interval includes zero.
+   tercile, averaging `r f(ds$ann_return)`% a year, but the interval includes zero, and
+   the F1 and momentum spreads have a correlation of `r f(tb$combination$correlation)`.
 
 The weighting hurdle is not met: the spread is positive under all three schemes but no
 alpha is significant.
 
 ```{r ladder, fig.width = 6.5, fig.height = 2.6, fig.cap = "Annual return of each F1 quintile (1 = lowest breadth change)."}
 ggplot(lad, aes(factor(quantile), ann_return, fill = method)) +
-  geom_col(position = "dodge") +
-  labs(x = "F1 quintile", y = "% a year", fill = "Weights")
+  geom_col(position = position_dodge(width = 0.8), width = 0.75) +
+  scale_fill_manual(values = c(cs = "#0B1F3A", ew = "#127C8A", rp = "#B08D3C")) +
+  labs(x = "F1 quintile", y = "% a year", fill = NULL)
 ```
 
 The extreme quintiles hold more liquid stocks than the middle ones even with equal
@@ -145,12 +155,22 @@ knitr::kable(dec,
 Costs absorb most of the gross spread because F1 has almost no persistence: the
 rank correlation of F1 between consecutive formations averages
 `r f(mean(pers$rank_autocorrelation))`, so most of each quintile is replaced every
-quarter. Turnover is a property of the signal, not of the rebalancing rule.
+quarter. Turnover is a property of the signal, not of the rebalancing rule. A borrow
+fee of 100 bps a year on the short leg costs a further 1 percentage point. Averaging F1
+over two quarters should keep more of each quintile and cut the cost in proportion.
+
+Much of the F1 return is a momentum return: the two gross spreads have a correlation of
+`r f(cmb$correlation)`, which is why the FF6 alpha, which controls for momentum, is about
+half the raw spread. A 50/50 combination has a Sharpe ratio of `r f(cmb$table$sharpe[3])`,
+between momentum alone (`r f(cmb$table$sharpe[1])`) and F1 alone
+(`r f(cmb$table$sharpe[2])`): F1 is a less volatile way to hold a similar bet rather than
+a separate source of return. This comparison is descriptive and gross of costs.
 
 # How to read the result
 
-The test has little power. With `r cs$n_months` months, the smallest effect it could
-detect with 80% power is `r f(inf_cs$mde_ann, 1)`% a year. Momentum, the closest known
+The test has little power. With `r cs$n_months` months and a spread this volatile, an
+alpha would have to be about `r f(inf_cs$mde_ann, 1)`% a year to be detected four times
+out of five; the pre-registered threshold of economic interest was 2%. Momentum, the closest known
 anomaly, was itself insignificant in the window: UMD averaged `r f(umd$ann_mean[1])`% a
 year (t = `r f(umd$t_mean[1])`) against `r f(umd$ann_mean[2])`% since 1963. The evidence
 is therefore inconclusive, not a rejection, and it is consistent with Nagel's finding
@@ -169,16 +189,16 @@ The hypotheses, definitions and decision rules were fixed before any return was
 computed; every later change is dated in the memo's deviation log and the report.
 The main ones:
 
-- **Identity at t (D2).** A CUSIP is accepted only if most holders report a value per
+- **Identity at t.** A CUSIP is accepted only if most holders report a value per
   share close to Tiingo's close at quarter end, recomputed at each formation.
-- **Suspected CUSIP changes (D9).** A stock where more than half of at least 20 holders
+- **Suspected CUSIP changes.** A stock where more than half of at least 20 holders
   are new is excluded for that formation: corporate actions that move holders to a new
   CUSIP otherwise look like mass initiations.
-- **Denominator (D10).** F1 divides by the matched cohort rather than all funds; ranks
+- **Denominator.** F1 divides by the matched cohort rather than all funds; ranks
   within a formation are identical.
-- **Traded-day presence (D11).** The universe requires trading on 90% of the previous 63
-  days, after a stock priced at a frozen level with zero volume after a takeover
-  entered the universe.
+- **Traded-day presence.** The universe requires trading on 90% of the previous 63
+  days, so that a stock whose vendor price stays frozen after a takeover, delisting or
+  halt cannot enter it.
 - **Short-leg weighting.** Under cs the bottom quintile is weighted by conviction in
   the short direction (negated F1 times liquidity).
 
