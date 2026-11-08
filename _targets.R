@@ -8,7 +8,7 @@
 #   silver     deploy_silver(): filings, holdings state, identity, units, prices
 #   gold       deploy_gold(): activity proxy, universe, cohort, F1 signal
 #   backtests  deploy_backtests(): quintile ladders in factoRverse, spreads, evaluation
-#   reports    deploy_reports(): analysis tables, HTML report, memo inputs
+#   reports    build_report_tables(), report/report.qmd (HTML) and memo/memo.qmd (PDF)
 #
 # Unit tests run first, on every run, and every deploy depends on them: a failing
 # unit test stops the pipeline before anything is downloaded or pinned.
@@ -170,5 +170,19 @@ list(
       bronze_ff_factors
       deploy_backtests(init_pipeline_board(board_path), verbose = FALSE)
     }
-  )
+  ),
+
+  ## Report inputs: every table and figure of the report and memo, from the pins
+  targets::tar_target(
+    report_tables,
+    {
+      backtests
+      build_report_tables(init_pipeline_board(board_path))
+    }
+  ),
+
+  ## Technical report (self-contained HTML) and memo (PDF); both only render
+  ## report_tables, read with targets::tar_read()
+  tarchetypes::tar_quarto(report, path = "report/report.qmd", quiet = TRUE),
+  tarchetypes::tar_quarto(memo, path = "memo/memo.qmd", quiet = TRUE)
 )

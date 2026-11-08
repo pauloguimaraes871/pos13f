@@ -20,7 +20,9 @@
 #' @param verbose Logical; factoRverse progress messages.
 #'
 #' @return A `port_backtest_cohort` whose backtests are named `<label>_q1` to
-#'   `<label>_q<n>`, each with the weighted average of `signal` as a portfolio metric.
+#'   `<label>_q<n>`, each with two portfolio metrics: the weighted average of `signal` and
+#'   of `liquidity_pct` (the stock's percentile of `mean_volfin_3m` that month, 1 = most
+#'   liquid).
 #'
 #' @details
 #' The bottom portfolio is the short leg, so it is scored on the negated signal
@@ -44,11 +46,18 @@ run_quantile_ladder <- function(inputs, signal, method = "cs", n_quantiles = 5, 
   }
   if (!method %in% c("cs", "ew", "rp")) stop("method must be one of cs, ew, rp.")
 
-  # One configuration and run per quantile
+  # Portfolio metrics: the sorting signal and the liquidity percentile, whose weighted
+  # averages show each portfolio's position in the signal and its size tilt
+  liquidity_pct <- inputs$liquidity_m_df@data |>
+    dplyr::mutate(liquidity_pct = dplyr::percent_rank(.data$mean_volfin_3m), .by = "dates") |>
+    dplyr::select("id", "liquidity_pct")
   metric <- factoRverse::create_meta_dataframe(
-    dplyr::select(inputs$signals_m_df@data, "id", "tickers", "dates", dplyr::all_of(signal)),
+    dplyr::select(inputs$signals_m_df@data, "id", "tickers", "dates", dplyr::all_of(signal)) |>
+      dplyr::left_join(liquidity_pct, by = dplyr::join_by("id"), relationship = "one-to-one"),
     meta_dataframe_name = signal
   )
+
+  # One configuration and run per quantile
   runs <- purrr::map(seq_len(n_quantiles), function(k) {
     ## The bottom portfolio is the top quantile of the negated signal
     short_leg <- k == 1

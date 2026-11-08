@@ -10,7 +10,8 @@
 #' @return A tibble ordered by `quantile` and `dates`: `quantile` (integer, 1 = lowest
 #'   signal), `dates`, `raw_return`, `net_return`, `direct_cost`, `market_impact_cost`
 #'   (percentage points of the portfolio, at the fee of the run), `signal_level` (the
-#'   portfolio's weighted average signal) and `n_holdings` (stocks with positive weight).
+#'   portfolio's weighted average signal), `liquidity_level` (its weighted average
+#'   liquidity percentile, 1 = most liquid) and `n_holdings` (stocks with positive weight).
 #'
 #' @details
 #' factoRverse stamps each series differently: returns on the first day of the month
@@ -38,6 +39,11 @@ extract_ladder_returns <- function(cohort) {
   returns <- cohort@port_returns_m_xts_list
   costs <- cohort@port_costs_m_xts_list
   key <- dplyr::join_by("quantile", "dates")
+  metrics <- cohort@port_metrics_m_xts_list
+  signal_metric <- setdiff(names(metrics), "liquidity_pct_m_xts")
+  if (length(signal_metric) != 1 || !"liquidity_pct_m_xts" %in% names(metrics)) {
+    stop("cohort must carry exactly the signal and liquidity_pct portfolio metrics.")
+  }
   long(returns$raw_returns_m_xts, "raw_return", month_before) |>
     dplyr::left_join(long(returns$net_returns_m_xts, "net_return", month_before),
       by = key, relationship = "one-to-one"
@@ -48,7 +54,10 @@ extract_ladder_returns <- function(cohort) {
     dplyr::left_join(long(costs$market_impact_cost_m_xts, "market_impact_cost", same_month),
       by = key, relationship = "one-to-one"
     ) |>
-    dplyr::left_join(long(cohort@port_metrics_m_xts_list[[1]], "signal_level", same_month),
+    dplyr::left_join(long(metrics[[signal_metric]], "signal_level", same_month),
+      by = key, relationship = "one-to-one"
+    ) |>
+    dplyr::left_join(long(metrics[["liquidity_pct_m_xts"]], "liquidity_level", same_month),
       by = key, relationship = "one-to-one"
     ) |>
     dplyr::left_join(count_ladder_holdings(cohort), by = key, relationship = "one-to-one") |>

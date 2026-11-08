@@ -1,0 +1,584 @@
+---
+title: "Institutional breadth and the cross-section of US stock returns"
+subtitle: "Technical report: data engineering, software engineering, design and results"
+date: last-modified
+format:
+  html:
+    embed-resources: true
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    fig-width: 7.5
+    fig-height: 3.8
+    df-print: kable
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+tb <- targets::tar_read(report_tables)
+s <- tb$summary
+row <- function(series, lag = 3) s[s$series == series & s$lag == lag, ]
+f <- function(x, d = 2) formatC(x, format = "f", digits = d, big.mark = ",")
+pct <- function(x, d = 1) paste0(formatC(100 * x, format = "f", digits = d), "%")
+n0 <- function(x) formatC(x, format = "d", big.mark = ",")
+ci <- function(r) paste0("[", f(12 * r$alpha_lo), ", ", f(12 * r$alpha_hi), "]")
+key <- "f1_breadth_change"
+sp <- function(method, design = "unconditional", tag = "spread_0_0", signal = key) {
+  row(paste(signal, method, design, tag, sep = "|"))
+}
+cs <- sp("cs")
+ew <- sp("ew")
+rp <- sp("rp")
+cs_net <- sp("cs", tag = "spread_25_100")
+ds <- sp("cs", "tercile_avg", signal = "f1_breadth_change_in_mom_12_1")
+stress <- sp("cs", "terminal_stress")
+mom <- sp("cs", "reference", signal = "mom_12_1")
+ic <- tb$rank_ic
+mono <- tb$monotonicity
+inf <- tb$inference
+inf_cs <- inf[inf$signal == key & inf$method == "cs" & inf$design == "unconditional", ]
+umd <- tb$momentum$umd
+dq <- function(pin, field) {
+  if (field == "n_rows" && pin %in% tb$file_rows$pin) {
+    return(tb$file_rows$n_rows[tb$file_rows$pin == pin])
+  }
+  tb$data_quality$value[tb$data_quality$pin == pin & tb$data_quality$field == field]
+}
+sizes <- tb$universe$sizes
+first_universe <- min(sizes$formation_date[sizes$n_members > 0])
+months <- cs$n_months
+library(ggplot2)
+theme_set(theme_minimal(base_size = 10))
+```
+
+# Summary
+
+The question is whether the change in the number of institutions holding a stock,
+read from 13F filings only after they are public, predicts the cross-section of
+returns of liquid US stocks, net of trading costs, and whether it adds to price
+momentum. The signal, F1, is the change in breadth of ownership of Chen, Hong and Stein
+(2002). The test covers `r months` months (March 2014 to October 2026) and 50 quarterly
+formations, on a universe of about 1,000 liquid stocks.
+
+```{r summary-table}
+show <- data.frame(
+  Test = c(
+    "F1 spread, cs weights (pre-registered)", "F1 spread, equal weights",
+    "F1 spread, risk parity", "F1 within momentum terciles (average)",
+    "F1 spread, terminal stress", "F1 spread net of 25 bps and 100 bps borrow",
+    "Momentum spread (reference), cs weights"
+  ),
+  rbind(cs, ew, rp, ds, stress, cs_net, mom)[, c("ann_return", "ann_vol", "ann_alpha", "alpha_t")]
+)
+show$CI <- c(ci(cs), ci(ew), ci(rp), ci(ds), ci(stress), ci(cs_net), ci(mom))
+names(show) <- c("Test", "Mean, % a year", "Volatility, %", "FF6 alpha, % a year", "Alpha t (NW 3)", "95% CI of alpha")
+knitr::kable(show, digits = 2, row.names = FALSE)
+```
+
+The pre-registered verdicts are:
+
+1. **Predictive content: no evidence.** The FF5 plus momentum (FF6) alpha of the F1
+   spread is `r f(cs$ann_alpha)`% a year with a 95% interval of `r ci(cs)`, and the
+   mean rank information coefficient is `r f(ic$mean_ic, 3)` (t = `r f(ic$t_ic)`). An
+   interval that includes zero is not a rejection: the smallest effect the test could
+   detect with 80% power is `r f(inf_cs$mde_ann, 1)`% a year.
+2. **Economic viability: not viable.** At 25 bps per dollar traded and 100 bps borrow,
+   the spread earns `r f(cs_net$ann_return)`% a year under cs weights and less under
+   the other schemes.
+3. **Incremental to momentum: neither shown nor rejected.** F1 earns a positive spread
+   in every momentum tercile, averaging `r f(ds$ann_return)`% a year, with an interval
+   that includes zero.
+
+Momentum itself was weak in this window: UMD averaged
+`r f(umd$ann_mean[1])`% a year (t = `r f(umd$t_mean[1])`) against
+`r f(umd$ann_mean[2])`% since 1963. The results are therefore inconclusive rather than
+a clear rejection.
+
+# Data engineering
+
+## Sources and what they mean
+
+**SEC Form 13F data sets.** Institutional managers with more than USD 100 million in
+listed US equities file Form 13F within 45 days of each quarter end. The SEC publishes
+the filings as structured quarterly archives (tables SUBMISSION, COVERPAGE,
+SUMMARYPAGE, OTHERMANAGER, OTHERMANAGER2 and INFOTABLE), starting in 2013Q2. The
+pipeline relies on the documented semantics of the data set readme and of EDGAR:
+
+- **Information date.** A filing is public on EDGAR when it is accepted, and a
+  submission after 5:30 pm Eastern is deemed filed the next business day (Regulation S-T
+  Rule 13(a)(2)). `FILING_DATE` is therefore never earlier than the moment the filing
+  became public. Every filing gets a `usable_date`, the first trading day strictly after
+  `FILING_DATE`. A report filed late enters on its own date, never at the deadline.
+- **Amendments.** Amendments arrive as separate submissions with their own filing date.
+  A RESTATEMENT replaces the report; NEW HOLDINGS adds positions to it. Amendments
+  without a type are ignored and counted (`r n0(dq("silver_holdings_state", "n_untyped_amendments_ignored"))`
+  filings).
+- **Units.** `VALUE` was reported in thousands of dollars before 2023-01-03 and in
+  dollars afterwards. The regime is set by filing date, not by report quarter, so an
+  old quarter amended after the change is read in dollars.
+
+**Tiingo end-of-day prices.** Tiingo provides daily open, high, low, close, volume and
+`adjClose`, adjusted for splits and cash dividends, for current and delisted US
+tickers. It was chosen because it covers dead companies (needed to avoid survivorship
+bias), gives a total-return series, has an affordable paid plan (Power) with full
+history and generous rate limits, and has a documented REST API. The silver suite
+checks that `adjClose` behaves as a total-return series: on dividend and split days
+the adjusted return agrees with the raw return plus the distribution for at least
+99.5% of events, and a known split (AAPL) is reproduced.
+
+**OpenFIGI.** 13F reports identify securities by CUSIP; Tiingo identifies them by
+ticker. OpenFIGI maps each share CUSIP to a composite FIGI and a ticker, which builds
+the ticker dictionary. The composite FIGI is the permanent `instrument_id` used from
+silver on. OpenFIGI answers with today's mapping, so a ticker later reused by another
+company could attach the wrong prices. Two defences: an implied-price check (most
+holders must report a value per share within 0.5 to 2 times Tiingo's close at quarter
+end, recomputed at each formation) and a log of what cannot be priced (memo
+deviation D7, 0.45% of 13F holding value, mostly dead firms).
+
+**Kenneth French data library.** Monthly Fama-French five factors and momentum (UMD),
+pinned in bronze so a rerun never depends on the library being online.
+
+## Medallion layout
+
+```{r layers}
+knitr::kable(data.frame(
+  Layer = c("Bronze", "Silver", "Gold", "Backtests", "Reports"),
+  Contents = c(
+    "Vendor data as delivered: one pin per SEC archive, Tiingo prices, OpenFIGI replies, FF factors",
+    "Point-in-time tables: filings with usable_date, holdings state with versions, security master, prices, returns, liquidity, terminal events, identity checks",
+    "Per formation: filer cohort, liquid universe, F1 and controls; monthly panels in factoRverse layout",
+    "Quintile ladders, spreads under cost and borrow scenarios, evaluation tables",
+    "Report and memo inputs, rendered documents"
+  ),
+  Suite = c(
+    "run_test_bronze_*: completeness of downloads, schema, window",
+    "run_test_silver_*: calendar, point in time, units, amendments, identity, total return",
+    "run_test_gold: contract, frozen signals, screens recomputed, sampled rows recomputed",
+    "run_test_backtests: sorting, holdings, accounting, rebalancing, coverage",
+    "unit tests of every table function"
+  )
+), col.names = c("Layer", "Contents", "Suite run before pinning"))
+```
+
+Each deploy runs its data-quality suite and pins only if every check passes. Bronze
+tolerates small known vendor defects and counts them in the pin metadata (for example
+`r n0(dq("bronze_tiingo_prices", "n_bad_adj_rows"))` Tiingo rows with a zero adjusted
+close out of `r n0(dq("bronze_tiingo_prices", "n_rows"))`); silver applies the strict
+checks.
+
+**Bronze.** SEC archives are listed from the EDGAR index, downloaded once, read with an
+explicit schema and pinned per archive. Tiingo prices are downloaded per ticker into a
+cache; OpenFIGI replies are cached per batch of 100 CUSIPs and requests resume from
+the cache. Deleting a cache file is the only way to force a new download.
+
+**Silver.** Filings get `usable_date` and amendment relations. Holdings go through an
+amendment state machine: every report version has `valid_from` (its `usable_date`) and
+`valid_to` (the `usable_date` of the filing that replaces it), so a reader at date t
+selects the versions with `valid_from <= t < valid_to`. Positions are summed within a
+filing and CUSIP (other-manager and discretion splits), options are removed, and values
+are converted to dollars. The security master maps CUSIPs to instruments; prices,
+returns, a trailing liquidity flag and terminal events come from Tiingo.
+
+**Gold.** At each formation (last trading day of February, May, August and November),
+gold selects the filer cohort, the liquid universe and computes F1 and its controls,
+then writes monthly panels whose first columns are `id`, `tickers`, `dates`.
+
+## Point in time, deduplication and the data contract
+
+```{r pit}
+knitr::kable(data.frame(
+  Problem = c(
+    "Look-ahead from filing dates", "Restated or amended reports",
+    "Same position reported twice", "Units", "Overlapping managers",
+    "Identity of the security", "Feature windows", "Stale prices after takeovers",
+    "Covariance window"
+  ),
+  Treatment = c(
+    "usable_date = first trading day after FILING_DATE; only reports usable by t enter",
+    "Version table with valid_from and valid_to; untyped amendments ignored and counted",
+    "Positions summed within filing and CUSIP; a filer counts once per instrument",
+    "Regime by filing date; implied-price check flags thousand-fold errors",
+    "Inclusion links read only from report versions current at t, both quarters; smaller report dropped",
+    "Composite FIGI; implied-price acceptance recomputed at t; suspected CUSIP changes excluded (D9)",
+    "All trailing windows end the day before their date",
+    "Universe requires trading on 90% of the previous 63 days (D11)",
+    "Daily returns dated the first of a month (after formation) left out"
+  ),
+  Test = c(
+    "Silver suite: usable_date rule, archive window, accession year",
+    "Holdings suite: event consistency, version coverage",
+    "Holdings suite: one row per filer, CUSIP and version",
+    "Holdings suite: units by regime",
+    "Gold suite: every overlap drop linked to a current inclusion",
+    "Gold suite: identity count recomputed on sampled rows",
+    "Unit test: a feature dated t ignores the price of t",
+    "Gold suite: positive liquidity on every panel row",
+    "Unit test: no first-of-month daily return in the input"
+  )
+), col.names = c("Problem", "Treatment", "Where it is tested"))
+```
+
+Three tests make the contract explicit. The gold suite recomputes every universe
+exclusion reason by a different route (a long table of failure flags and a sort-based
+rank) and requires agreement on every row. It recomputes 40 randomly drawn panel rows
+and 20 cohort filers from silver in plain dplyr and compares them with the SQL. And the
+backtest suite requires that a higher quantile holds a higher weighted average signal
+in every month, which checks that the portfolios really sort on the signal.
+
+## How the pipeline runs and is updated
+
+The pipeline is a `targets` graph. A run is `targets::tar_make()`; targets reruns only
+what changed. The first target runs the unit tests, and bronze depends on it, so no
+data is ingested while a test fails. A new SEC batch is added by setting `window_end`
+in `_targets.R`; bronze records the window it covered in a manifest, and the Tiingo
+price cache must be refreshed because adjusted prices are restated after every split
+and dividend.
+
+**Pins and duckdb.** Every table is a versioned pin on a local folder board, with
+metadata recording the versions of the pins it was built from and the counts of its
+suite, so any number in this report can be traced to the exact inputs
+(Appendix A). The large tables (`r n0(dq("silver_holdings_state", "n_state_rows"))`
+holdings state rows, `r n0(dq("silver_prices_d", "n_rows"))` daily prices) are written
+as parquet and processed in duckdb with a memory limit and spill to disk; only
+aggregates are collected into R.
+
+## factoRverse inputs and S4 objects
+
+The backtests run on factoRverse, the author's portfolio-construction package. Its
+inputs are S4 objects (`meta_dataframe`, `meta_xts`) whose validity rules fix the
+schema: key columns first, `id = tickers-dates`, rows sorted, numeric values, a
+consistent `current_date` across inputs, a liquidity metric whose name identifies it.
+Gold writes plain tables in exactly that layout, and the backtest layer wraps them, so
+a violation fails at construction instead of producing a wrong portfolio. factoRverse
+0.9.1 ships in `vendor/` with its model-selection dependencies moved to Suggests; its
+portfolio code is unchanged.
+
+# Software engineering
+
+**Test-driven development.** Functions are small, one per file, and written with their
+tests. The unit suite has 300 tests with 686 expectations, all passing. Fixtures are real-data samples rather than
+invented rows: `toy_bronze_sec.rds` holds 32 real filers with forced edge cases
+(amendment chains, late reports), and `toy_silver_gold.rds` holds 22 real instruments
+and 400 filers over three formations, on which the gold SQL, the dplyr references and
+the factoRverse backtests all run. Each suite also has tests that break its input and
+expect it to fail.
+
+**Continuous integration.** GitHub Actions runs `R CMD check` and the unit suite on a
+clean Ubuntu runner on every push and pull request, installing factoRverse from the
+vendored tarball. No keys or data are needed.
+
+**Reproducibility.** `renv.lock` pins every package version, including factoRverse as
+a local source; a fresh clone restores with `renv::restore()`. `targets` records what
+was built from what, and pins record lineage and suite counts.
+
+**Logging.** Every data-quality suite runs through `run_logged_test()`, which writes a
+timestamped log under `logs/tests/` and returns pass or fail; the deploy stops before
+pinning on failure. Long functions take `verbose` and report progress; pin metadata
+stores the counts each suite measured; `targets` keeps timing and errors per target.
+API keys are read from the user environment and never printed or logged.
+
+**Git workflow and review.** Every change goes through a feature branch, small commits
+with conventional messages and a pull request. The code was written and tested by
+Claude Code, reviewed independently by Codex on each pull request, and approved and
+merged by the author. Review findings are classified (accepted, accepted with
+modification, rejected) and fixed in their own commits; examples include an overlap
+rule that read superseded filings and a monotonicity test with the wrong null.
+
+**Backtest engine.** `run_quantile_ladder()` runs each quintile of a signal as a
+factoRverse backtest and bundles them into a cohort. A signal is a column of the gold
+signals panel, so F1b, F1c or a blend need one column and no new backtest code. The
+bottom portfolio is scored on the negated signal, so its cs weights grow with
+conviction in the short direction. Portfolios rebalance at each formation and drift in
+between. Trading costs are factoRverse's own (fee times weight traded), run at 5 bps
+and rescaled to each scenario, because its validator accepts fees below 10 bps only.
+The borrow fee is charged on the short leg, whose weights sum to one. A stock whose
+price stops earns zero afterwards; the terminal-stress scenario charges -30% in the
+month of its last price.
+
+**Testing the backtest output.** Besides the data contract, the suite checks that net
+returns equal raw returns minus costs in every month, that trading happens only at
+rebalances, that every portfolio holds at least 20 stocks, that every quantile covers
+the same months, and that net spreads fall with the fee. Each portfolio also carries
+two weighted metrics: the average signal (must rise with the quantile) and the
+average liquidity percentile, which measures the size tilt of each leg.
+
+# Rationale
+
+## Literature
+
+```{r papers}
+knitr::kable(data.frame(
+  Paper = c(
+    "Chen, Hong and Stein (2002), JFE 66", "Nagel (2005), JFE 78",
+    "Sias, Starks and Titman (2006), JB 79", "Jegadeesh and Titman (1993), JF 48",
+    "Amihud (2002), JFM 5"
+  ),
+  Signal = c(
+    "Change in breadth of mutual fund ownership (DBREADTH)",
+    "Breadth and residual institutional ownership",
+    "Changes in number of institutions vs fraction held",
+    "Past 3 to 12 month returns (momentum)",
+    "Illiquidity: average |return| / dollar volume"
+  ),
+  Finding = c(
+    "Lowest decile of breadth change underperforms the top decile by 6.38% over 12 months (1979 to 1998)",
+    "After 1998, falling-breadth stocks outperformed rising-breadth stocks, almost eliminating the effect over 1980 to 2003",
+    "Returns relate more to changes in the number of institutions than in shares held: information plays a central role",
+    "Buying winners and selling losers earns positive returns over 3 to 12 months",
+    "Expected returns increase with illiquidity"
+  )
+), col.names = c("Paper", "Signal", "Finding"))
+```
+
+Chen, Hong and Stein define breadth as the share of mutual funds holding a stock and
+its change over funds present in both quarters: holders at t minus holders at t-1,
+divided by all funds at t-1 (p. 180). Breadth rises steeply with size, from 0.25% of
+funds for the smallest quintile to 7.09% for the largest (Table 1).
+
+## Mechanisms
+
+F1 is meant to expose the portfolio to three channels. First, an underreaction
+channel: if institutions accumulate a stock gradually as information diffuses, a rise
+in breadth marks a trend that prices have not finished incorporating, which is why
+the link to momentum matters. Second, informed trading: Sias, Starks and Titman read
+the stronger link to the number of institutions as evidence that institutional
+trading carries information, so following entries replicates part of that
+positioning. Third, the short-sale constraint channel of Chen, Hong and Stein: when
+pessimists cannot short, low breadth signals that they have left, and the stock is
+overpriced. That channel is weaker here, because many 13F filers can short. The 45-day
+disclosure lag works against all three.
+
+## F1, F1b and F1c
+
+F1 follows the paper. For each formation it counts the cohort filers holding a stock
+in quarters q-1 and q and divides the change by the cohort size, a constant for the
+formation (memo deviation D10: the paper divides by all funds; ranks are identical).
+Because the denominator is the same for all stocks, the extremes of F1 are widely held
+stocks: a small company cannot gain 800 holders. F1b (change in ownership measured by
+value) and F1c (net new holders divided by the stock's own holders at q-1) are planned
+extensions that measure the same idea without that structural size tilt; each is a
+separate trial.
+
+## Evaluation framework
+
+The hypotheses, definitions and decision rules were written before any return was
+computed (memo, Sections 3 and 8), and every later change is dated in the memo's
+deviation log. The evaluation uses:
+
+- FF6 alpha (Fama-French five factors plus UMD) with Newey and West (1987) standard
+  errors at lags 3 and 6. UMD is included because institutions trade with past returns,
+  so F1 could be momentum in disguise.
+- The dependent double sort within momentum terciles, which asks whether F1 predicts
+  returns among stocks with similar momentum.
+- The rank information coefficient per formation, tested across the 50 formations.
+- A monotonicity test across quintiles (intersection-union: every adjacent spread must
+  be positive), as a diagnostic.
+- A conjunctive weighting hurdle: a credible signal must work under cs, equal weights
+  and risk parity, and not only in illiquid stocks; a scheme is never selected.
+- The probabilistic Sharpe ratio (an IID diagnostic) and, once F1b and F1c are tested,
+  the deflated Sharpe ratio of Bailey and Lopez de Prado (2014) and the false discovery
+  rate control of Benjamini and Hochberg (1995) across the three signals.
+- Costs: break-even fee, turnover, and net results at 10, 25 and 50 bps.
+
+# Results
+
+## Dataset
+
+```{r coverage, fig.cap = "Original 13F reports and distinct filers per report quarter."}
+cov <- tb$coverage
+ggplot(cov, aes(period_of_report)) +
+  geom_line(aes(y = n_filings, colour = "Original reports")) +
+  geom_line(aes(y = n_filers, colour = "Filers")) +
+  labs(x = NULL, y = NULL, colour = NULL) +
+  theme(legend.position = "top")
+```
+
+Coverage grows from about `r n0(min(cov$n_filings))` reports per quarter at the start
+to `r n0(max(cov$n_filings))`. The pipeline holds `r n0(dq("silver_filings", "n_rows"))`
+filings and `r n0(dq("silver_holdings_state", "n_state_rows"))` holdings state rows.
+
+```{r delay, fig.cap = "Share of original reports usable by days after quarter end (2014 to 2026)."}
+ggplot(tb$filing_delay, aes(days, share_usable)) +
+  geom_line() +
+  geom_vline(xintercept = c(45, 60), linetype = "dashed") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = "Days after quarter end", y = NULL)
+```
+
+Reports bunch just before the 45-day deadline. About
+`r pct(tb$filing_delay$share_usable[tb$filing_delay$days == 45])` are usable by day 45
+and `r pct(tb$filing_delay$share_usable[tb$filing_delay$days == 60])` by day 60, so
+forming at month end loses almost no reports.
+
+```{r universe, fig.cap = "Cohort filers and universe stocks per formation."}
+ggplot(sizes[sizes$formation_date >= first_universe, ], aes(formation_date)) +
+  geom_line(aes(y = cohort_size, colour = "Cohort filers")) +
+  geom_line(aes(y = n_members, colour = "Universe stocks")) +
+  labs(x = NULL, y = NULL, colour = NULL) +
+  theme(legend.position = "top")
+```
+
+```{r reasons}
+r <- tb$universe$reasons
+r$reason[r$reason == "member"] <- "universe member"
+tot <- stats::aggregate(n ~ reason, data = r, FUN = sum)
+tot$share <- tot$n / sum(tot$n)
+tot <- tot[order(-tot$n), ]
+knitr::kable(tot, digits = 3, row.names = FALSE, col.names = c("Reason", "Candidate rows", "Share"))
+```
+
+Most candidates leave for lack of liquidity rank or price. Identity screens remove the
+rows whose price source cannot be confirmed at t.
+
+## Quintile ladders
+
+```{r ladder, fig.cap = "Annual return of each F1 quintile by weighting scheme."}
+lad <- tb$ladder[tb$ladder$signal == key & tb$ladder$design == "unconditional", ]
+ggplot(lad, aes(factor(quantile), ann_return, fill = method)) +
+  geom_col(position = "dodge") +
+  labs(x = "F1 quintile (1 = lowest)", y = "% a year", fill = NULL)
+```
+
+```{r ladder-table}
+lad$n_holdings <- round(lad$n_holdings)
+knitr::kable(
+  lad[, c("method", "quantile", "ann_return", "ann_vol", "liquidity_level", "n_holdings")],
+  digits = 2, row.names = FALSE,
+  col.names = c("Weights", "Quintile", "Return, % a year", "Volatility, %", "Liquidity percentile", "Stocks")
+)
+```
+
+Returns are flat from the first to the fourth quintile and jump at the fifth. The
+intersection-union monotonicity test does not reject a flat relation (p =
+`r f(mono$p_value[mono$method == "cs"])` cs, `r f(mono$p_value[mono$method == "ew"])`
+ew, `r f(mono$p_value[mono$method == "rp"])` rp).
+
+The liquidity column (the weighted average percentile of 63-day dollar volume, 1 = most
+liquid) shows the size tilt. Even with equal weights, both extreme quintiles hold more
+liquid stocks (`r f(lad$liquidity_level[lad$method == "ew" & lad$quantile == 1])` and
+`r f(lad$liquidity_level[lad$method == "ew" & lad$quantile == 5])`) than the middle ones
+(`r f(min(lad$liquidity_level[lad$method == "ew" & lad$quantile %in% 2:4]))` to
+`r f(max(lad$liquidity_level[lad$method == "ew" & lad$quantile %in% 2:4]))`): F1's
+extremes are widely held stocks by construction. cs weights raise both legs further
+(`r f(lad$liquidity_level[lad$method == "cs" & lad$quantile == 1])` and
+`r f(lad$liquidity_level[lad$method == "cs" & lad$quantile == 5])`), more so on the long
+side. The largest F1 values at the last formation are large technology stocks gaining
+hundreds of holders:
+
+```{r extremes}
+ex <- tb$extremes
+knitr::kable(ex[, c("side", "ticker", "f1_breadth_change", "n_holders_prev", "n_holders_curr")],
+  digits = 4, row.names = FALSE,
+  col.names = c("Side", "Ticker", "F1", "Holders q-1", "Holders q")
+)
+```
+
+## Spreads, alpha and costs
+
+```{r cumulative, fig.cap = "Cumulative gross spread (top minus bottom quintile), and UMD over the same months."}
+sp_all <- tb$spreads[tb$spreads$cost_bps == 0 & tb$spreads$borrow_bps == 0 &
+  ((tb$spreads$signal == key & tb$spreads$design == "unconditional") |
+    tb$spreads$design == "reference"), ]
+sp_all$series <- ifelse(sp_all$design == "reference", "Momentum (cs)", paste("F1", sp_all$method))
+sp_all <- sp_all[order(sp_all$series, sp_all$dates), ]
+sp_all$cum <- stats::ave(sp_all$gross_return, sp_all$series, FUN = function(x) cumprod(1 + x / 100) - 1)
+ggplot(sp_all, aes(dates, cum, colour = series)) +
+  geom_line() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = NULL, y = NULL, colour = NULL) +
+  theme(legend.position = "top")
+```
+
+```{r costs}
+dec <- tb$costs$decomposition
+dec <- dec[dec$signal == key & dec$design == "unconditional" & dec$borrow_bps %in% c(0, 100) &
+  (dec$borrow_bps == 0 | dec$cost_bps == 25), ]
+knitr::kable(dec[, c("method", "cost_bps", "borrow_bps", "gross", "trading", "borrow", "net")],
+  digits = 2, row.names = FALSE,
+  col.names = c("Weights", "Fee, bps", "Borrow, bps", "Gross", "Trading", "Borrow cost", "Net")
+)
+```
+
+```{r turnover}
+tv <- tb$costs$turnover
+tv <- tv[tv$signal == key & tv$design == "unconditional", ]
+pers <- tb$persistence
+```
+
+Each leg trades about `r f(mean(tv$traded_per_rebalance), 1)` times its value per
+rebalance (sum of absolute weight changes). The reason is the signal: the rank
+correlation of F1 between consecutive formations averages
+`r f(mean(pers$rank_autocorrelation))`, so most of each quintile is replaced every
+quarter. The cs break-even fee is `r f(inf_cs$breakeven_bps, 0)` bps per dollar traded.
+
+## Conditional on momentum and the momentum benchmark
+
+```{r terciles}
+ter <- s[grepl("f1_breadth_change_in_mom_12_1\\|cs\\|tercile_[0-9]\\|spread_0_0", s$series) & s$lag == 3, ]
+ter$Tercile <- c("Low momentum", "Middle", "High momentum")[as.integer(sub(".*tercile_([0-9]).*", "\\1", ter$series))]
+knitr::kable(ter[, c("Tercile", "ann_return", "ann_alpha", "alpha_t")],
+  digits = 2, row.names = FALSE,
+  col.names = c("Momentum tercile", "F1 spread, % a year", "FF6 alpha", "t")
+)
+knitr::kable(umd[, c("period", "n_months", "ann_mean", "ann_vol", "t_mean", "capm_alpha", "capm_t")],
+  digits = 2, row.names = FALSE,
+  col.names = c("UMD", "Months", "Mean, % a year", "Volatility", "t", "CAPM alpha", "t")
+)
+```
+
+UMD averaged `r f(umd$ann_mean[1])`% a year over the window with t =
+`r f(umd$t_mean[1])`, against `r f(umd$ann_mean[2])`% (t = `r f(umd$t_mean[2])`) since
+1963, and swung between large gains and losses from year to year. The study's own
+momentum spread loads on UMD and earns an FF6 alpha near zero. In a decade where the
+best-documented anomaly in this family is not significant, an insignificant F1 alpha is
+weak evidence either way.
+
+# Limitations
+
+- **Power.** With `r months` months the minimum detectable effect of the cs spread is
+  `r f(inf_cs$mde_ann, 1)`% a year, far above the 2% a year the memo treats as
+  economically relevant. More months help slowly (four times the history halves it);
+  less volatile constructions help more.
+- **Size tilt.** F1's extremes are widely held stocks and cs weights add liquidity;
+  F1c removes the structural part.
+- **Sample period.** The whole sample lies after the breadth reversal reported by
+  Nagel (2005).
+- **Identity snapshot.** OpenFIGI and Tiingo are today's mappings; unpriceable holdings
+  are 0.45% of value, mostly dead firms (D7).
+- **Disclosure lag.** Signals are formed at month end, up to two weeks after most
+  filings are public.
+- **Stale stocks after formation** earn zero until the next formation and miss the
+  stress return (D11).
+
+# Extensions
+
+1. F1b and F1c, each a separate trial, with false discovery rate control across F1,
+   F1b and F1c and the deflated Sharpe ratio over all trials.
+2. A costs study: turnover by leg and through time, square-root market impact,
+   realistic fees and general-collateral borrow, and F1 smoothed over two quarters to
+   raise persistence and cut turnover.
+3. Leave-one-year-out and sector checks of the top-quintile premium.
+4. Disclosure-lag profile: returns in months 1 to 12 after formation.
+5. Activity-proxy split and a capacity-based universe.
+6. Coverage and lint badges in continuous integration.
+
+# Appendix A: pin lineage {.appendix}
+
+```{r lineage}
+lin <- tb$lineage[!grepl("^bronze_sec_", tb$lineage$pin), ]
+knitr::kable(lin, row.names = FALSE, col.names = c("Pin", "Version", "Created", "Inputs"))
+```
+
+# Appendix B: data-quality counts {.appendix}
+
+```{r dq}
+dqt <- tb$data_quality
+for (i in seq_len(nrow(tb$file_rows))) {
+  dqt$value[dqt$pin == tb$file_rows$pin[i] & dqt$field == "n_rows"] <- tb$file_rows$n_rows[i]
+}
+dqt$value <- ifelse(dqt$value < 1, formatC(dqt$value, format = "f", digits = 4), n0(dqt$value))
+knitr::kable(dqt, row.names = FALSE, col.names = c("Pin", "Count", "Value"))
+```

@@ -1,6 +1,7 @@
 test_that("every series is dated by its holding month and net equals raw minus costs", {
   ladder <- toy_ladder()
   expect_true(all(lubridate::mday(ladder$dates) == 1))
+  expect_true(all(ladder$liquidity_level >= 0 & ladder$liquidity_level <= 1))
   ## Finished months only: August 2020 is the toy's unfinished month
   months <- seq(as.Date("2019-12-01"), as.Date("2020-07-01"), by = "month")
   expect_equal(sort(unique(ladder$dates)), months)

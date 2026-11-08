@@ -16,6 +16,7 @@ Suggests:
     knitr,
     lmtest,
     quarto,
+    scales,
     tarchetypes,
     targets,
     zip
