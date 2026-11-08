@@ -20,3 +20,5 @@
 ^logs$
 ^papers$
 ^vendor$
+^_quarto\.yml$
+^report$

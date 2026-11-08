@@ -38,7 +38,9 @@ each dollar traded (0.05 is 5 bps; factoRverse accepts values below 0.1).}
 }
 \value{
 A \code{port_backtest_cohort} whose backtests are named \verb{<label>_q1} to
-\verb{<label>_q<n>}, each with the weighted average of \code{signal} as a portfolio metric.
+\verb{<label>_q<n>}, each with two portfolio metrics: the weighted average of \code{signal} and
+of \code{liquidity_pct} (the stock's percentile of \code{mean_volfin_3m} that month, 1 = most
+liquid).
 }
 \description{
 Runs \code{run_port_backtest()} once per quantile of \code{signal} (quintiles by default) and

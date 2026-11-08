@@ -13,6 +13,9 @@
 #'   robust only if it holds under all three).
 #' @param double_sort Character pair `c(signal, conditioner)` for the dependent double
 #'   sort (memo Section 8, verdict 3), run under `cs`.
+#' @param reference_signals Character vector, signals backtested under `cs` as a
+#'   reference for reading the results (design `"reference"`; momentum by default), not
+#'   as tested hypotheses.
 #' @param log_path Character scalar, folder for the data-quality log.
 #' @param verbose Logical; print progress.
 #'
@@ -25,6 +28,7 @@
 #' @export
 deploy_backtests <- function(board, signals = "f1_breadth_change", methods = c("cs", "ew", "rp"),
                              double_sort = c("f1_breadth_change", "mom_12_1"),
+                             reference_signals = "mom_12_1",
                              log_path = file.path("logs", "tests"), verbose = TRUE) {
   # Validate inputs
   if (!inherits(board, "pins_board")) stop("board must be a pins board (init_pipeline_board()).")
@@ -62,7 +66,13 @@ deploy_backtests <- function(board, signals = "f1_breadth_change", methods = c("
     )) |>
       dplyr::mutate(signal = signal, method = "cs", design = "terminal_stress")
   })
-  ladder <- dplyr::bind_rows(ladders, double, stress)
+  # Reference: momentum on the same universe and machinery, to read F1 against
+  reference <- purrr::map(reference_signals, function(signal) {
+    if (verbose) message("Backtest: reference ", signal, " under cs")
+    extract_ladder_returns(run_quantile_ladder(inputs, signal, "cs")) |>
+      dplyr::mutate(signal = signal, method = "cs", design = "reference")
+  })
+  ladder <- dplyr::bind_rows(ladders, double, stress, reference)
 
   # Evaluation, test, pins
   results <- evaluate_backtests(ladder, inputs, factors, board, signals)

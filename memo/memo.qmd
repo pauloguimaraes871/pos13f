@@ -1,0 +1,208 @@
+---
+title: "Institutional breadth as a cross-sectional signal: research memo"
+date: last-modified
+format:
+  typst:
+    papersize: a4
+    margin:
+      x: 2cm
+      y: 2cm
+    fontsize: 10pt
+    section-numbering: "1."
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+tb <- targets::tar_read(report_tables)
+s <- tb$summary
+row <- function(series, lag = 3) s[s$series == series & s$lag == lag, ]
+f <- function(x, d = 2) formatC(x, format = "f", digits = d, big.mark = ",")
+ci <- function(r) paste0("[", f(12 * r$alpha_lo), ", ", f(12 * r$alpha_hi), "]")
+key <- "f1_breadth_change"
+sp <- function(method, design = "unconditional", tag = "spread_0_0", signal = key) {
+  row(paste(signal, method, design, tag, sep = "|"))
+}
+cs <- sp("cs")
+ew <- sp("ew")
+rp <- sp("rp")
+cs_net <- sp("cs", tag = "spread_25_100")
+ds <- sp("cs", "tercile_avg", signal = "f1_breadth_change_in_mom_12_1")
+stress <- sp("cs", "terminal_stress")
+mom <- sp("cs", "reference", signal = "mom_12_1")
+ic <- tb$rank_ic
+mono <- tb$monotonicity
+inf_cs <- tb$inference[tb$inference$signal == key & tb$inference$method == "cs" &
+  tb$inference$design == "unconditional", ]
+umd <- tb$momentum$umd
+pers <- tb$persistence
+lad <- tb$ladder[tb$ladder$signal == key & tb$ladder$design == "unconditional", ]
+top3 <- utils::head(tb$extremes[tb$extremes$side == "top", ], 3)
+top3$gain <- top3$n_holders_curr - top3$n_holders_prev
+library(ggplot2)
+theme_set(theme_minimal(base_size = 9))
+```
+
+This memo summarises the full technical report (`report/report.html`), which documents
+the data pipeline, the software, the design and every result in detail.
+
+# Question and signal
+
+Does the change in the number of institutions holding a stock, read from Form 13F
+filings only after they are public, predict the cross-section of returns of liquid US
+stocks, net of costs, and does it add to momentum? The signal F1 is the change in
+breadth of ownership of Chen, Hong and Stein (2002, p. 180): among filers present in
+both quarters, holders at q minus holders at q-1, divided by the number of filers. It
+was chosen because it is defined in a peer-reviewed paper, needs only holdings counts
+(robust to value errors in 13F data), and connects to three mechanisms: gradual
+accumulation by institutions as information diffuses (an underreaction and momentum
+channel), informed institutional trading (Sias, Starks and Titman 2006), and short-sale
+constraints (Chen, Hong and Stein). The threat is that the signal was public for up to
+45 days before formation, and that Nagel (2005) found the breadth effect reversed after
+1998, before our sample starts.
+
+# Data and design
+
+SEC Form 13F data sets (2013Q2 to 2026Q2) give holdings; Tiingo gives total-return daily
+prices for live and dead tickers; OpenFIGI maps CUSIPs to permanent identifiers. A
+`targets` pipeline moves data through bronze (as delivered), silver (point-in-time
+tables) and gold (signals and panels), with a data-quality suite before each pin.
+
+- **Point in time.** A filing is usable the trading day after its filing date; amended
+  reports are versioned so a reader at date t sees only the versions current at t.
+- **Universe.** At each formation (end of February, May, August, November), the 1,000
+  most liquid US common stocks with a price above USD 5, a year of history, trading on
+  90% of recent days and a confirmed identity.
+- **Portfolios.** F1 quintiles, rebalanced quarterly and drifting in between, under
+  three weightings: cs (signal times liquidity, pre-registered), equal weight and risk
+  parity. The spread is the top minus the bottom quintile.
+- **Evaluation.** FF5 plus momentum (FF6) alpha with Newey-West standard errors, rank
+  IC per formation, a double sort within momentum terciles, a monotonicity test,
+  terminal-loss stress, and costs of 10 to 50 bps per dollar traded plus 100 bps borrow.
+  A credible signal must pass under all three weightings.
+
+# Results
+
+```{r results}
+show <- data.frame(
+  Test = c(
+    "F1, cs (pre-registered)", "F1, equal weight", "F1, risk parity",
+    "F1 within momentum terciles", "F1, terminal stress",
+    "F1 net, 25 bps + 100 bps borrow", "Momentum (reference)"
+  ),
+  rbind(cs, ew, rp, ds, stress, cs_net, mom)[, c("ann_return", "ann_alpha", "alpha_t")]
+)
+show$CI <- c(ci(cs), ci(ew), ci(rp), ci(ds), ci(stress), ci(cs_net), ci(mom))
+names(show) <- c("Spread", "Mean, % a year", "FF6 alpha", "t", "95% CI")
+knitr::kable(show, digits = 2, row.names = FALSE)
+```
+
+1. **Predictive content: no evidence.** The cs spread earns `r f(cs$ann_return)`% a
+   year gross, with an FF6 alpha of `r f(cs$ann_alpha)`% and an interval of `r ci(cs)`.
+   The mean rank IC is `r f(ic$mean_ic, 3)` (t = `r f(ic$t_ic)`). Returns are flat from
+   the first to the fourth quintile and rise only at the fifth; the monotonicity test
+   does not reject a flat relation (p = `r f(mono$p_value[mono$method == "cs"])`).
+2. **Economic viability: not viable.** Net of 25 bps and 100 bps borrow, the cs spread
+   earns `r f(cs_net$ann_return)`% a year and the other weightings earn less. F1 changes
+   almost completely each quarter (rank autocorrelation `r f(mean(pers$rank_autocorrelation))`),
+   so each leg trades its full value at every rebalance; the break-even fee is
+   `r f(inf_cs$breakeven_bps, 0)` bps.
+3. **Incremental to momentum: not shown.** F1 earns a positive spread in every momentum
+   tercile, averaging `r f(ds$ann_return)`% a year, but the interval includes zero.
+
+The weighting hurdle is not met: the spread is positive under all three schemes but no
+alpha is significant.
+
+```{r ladder, fig.width = 6.5, fig.height = 2.6, fig.cap = "Annual return of each F1 quintile (1 = lowest breadth change)."}
+ggplot(lad, aes(factor(quantile), ann_return, fill = method)) +
+  geom_col(position = "dodge") +
+  labs(x = "F1 quintile", y = "% a year", fill = "Weights")
+```
+
+The extreme quintiles hold more liquid stocks than the middle ones even with equal
+weights (liquidity percentile `r f(lad$liquidity_level[lad$method == "ew" & lad$quantile == 1])`
+and `r f(lad$liquidity_level[lad$method == "ew" & lad$quantile == 5])` against about
+`r f(mean(lad$liquidity_level[lad$method == "ew" & lad$quantile %in% 2:4]))`): the
+extremes of F1 are widely held stocks, which can gain or lose hundreds of holders in a
+quarter. At the last formation the three largest F1 values were
+`r paste(top3$ticker, collapse = ", ")`, adding `r min(top3$gain)` to `r max(top3$gain)`
+holders each.
+
+## Costs
+
+```{r costs}
+dec <- tb$costs$decomposition
+dec <- dec[dec$signal == key & dec$design == "unconditional" & dec$borrow_bps == 0 & dec$cost_bps %in% c(0, 10, 25, 50), ]
+dec <- dec[order(dec$method, dec$cost_bps), c("method", "cost_bps", "gross", "trading", "net")]
+knitr::kable(dec,
+  digits = 2, row.names = FALSE,
+  col.names = c("Weights", "Fee, bps", "Gross, % a year", "Trading cost", "Net")
+)
+```
+
+Costs absorb most of the gross spread because F1 has almost no persistence: the
+rank correlation of F1 between consecutive formations averages
+`r f(mean(pers$rank_autocorrelation))`, so most of each quintile is replaced every
+quarter. Turnover is a property of the signal, not of the rebalancing rule.
+
+# How to read the result
+
+The test has little power. With `r cs$n_months` months, the smallest effect it could
+detect with 80% power is `r f(inf_cs$mde_ann, 1)`% a year. Momentum, the closest known
+anomaly, was itself insignificant in the window: UMD averaged `r f(umd$ann_mean[1])`% a
+year (t = `r f(umd$t_mean[1])`) against `r f(umd$ann_mean[2])`% since 1963. The evidence
+is therefore inconclusive, not a rejection, and it is consistent with Nagel's finding
+that the breadth effect weakened after 1998.
+
+```{r umd}
+knitr::kable(umd[, c("period", "ann_mean", "t_mean", "capm_alpha", "capm_t")],
+  digits = 2,
+  row.names = FALSE, col.names = c("UMD", "Mean, % a year", "t", "CAPM alpha", "t")
+)
+```
+
+# Design choices and deviations
+
+The hypotheses, definitions and decision rules were fixed before any return was
+computed; every later change is dated in the memo's deviation log and the report.
+The main ones:
+
+- **Identity at t (D2).** A CUSIP is accepted only if most holders report a value per
+  share close to Tiingo's close at quarter end, recomputed at each formation.
+- **Suspected CUSIP changes (D9).** A stock where more than half of at least 20 holders
+  are new is excluded for that formation: corporate actions that move holders to a new
+  CUSIP otherwise look like mass initiations.
+- **Denominator (D10).** F1 divides by the matched cohort rather than all funds; ranks
+  within a formation are identical.
+- **Traded-day presence (D11).** The universe requires trading on 90% of the previous 63
+  days, after a stock priced at a frozen level with zero volume after a takeover
+  entered the universe.
+- **Short-leg weighting.** Under cs the bottom quintile is weighted by conviction in
+  the short direction (negated F1 times liquidity).
+
+# Reproducibility
+
+The project is an R package with a `targets` pipeline: `renv::restore()` then
+`targets::tar_make()` rebuilds every pin, the report and this memo. Each layer pins
+only after its data-quality suite passes; 300 unit tests run on every change and in
+continuous integration on a clean machine. The backtest engine, factoRverse, ships in
+the repository.
+
+# Limitations
+
+Short sample and low power; a structural size tilt in F1; identity from today's
+OpenFIGI and Tiingo mappings (0.45% of 13F value cannot be priced, mostly dead firms);
+formation up to two weeks after most filings are public; stocks that stop trading
+after formation earn zero until the next formation. The size tilt matters most: F1
+partly ranks stocks by how widely they are held.
+
+# Next steps
+
+F1b (ownership change by value) and F1c (new holders relative to the stock's own
+holders) measure the same idea without the size tilt, each as a separate trial with
+false discovery rate control and a deflated Sharpe ratio. A costs study would test
+smoothing F1 over two quarters, which should raise persistence and cut turnover.
+Leave-one-year-out and sector checks would test whether the top-quintile premium is
+concentrated in a few episodes.

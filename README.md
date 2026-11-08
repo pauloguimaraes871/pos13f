@@ -60,9 +60,9 @@ keys and no network, in under a minute. To be added.
 R/                     package functions, one per file
 tests/testthat/        one test file per function; fixtures/ for test data
 inst/extdata/fixture/  offline fixture (fabricated 13F rows, recorded API replies)
-inst/report/           self-contained HTML report source
+report/                technical report (report.qmd, rendered to self-contained HTML by targets)
 _targets.R             pipeline definition
-memo/                  research memo
+memo/                  research memo (memo.qmd, rendered to PDF by targets)
 docs/                  implementation plan and pre-registered research design
 data-raw/              spike scripts; cache/ holds downloaded data (git-ignored)
 ```

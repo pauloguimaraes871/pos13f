@@ -24,3 +24,11 @@ inst/report/*.html
 
 # Literature PDFs: copyrighted, kept locally only
 papers/
+
+# Quarto work files
+.quarto/
+report/*_files/
+memo/*_files/
+
+/.quarto/
+**/*.quarto_ipynb

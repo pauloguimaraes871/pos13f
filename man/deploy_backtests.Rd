@@ -9,6 +9,7 @@ deploy_backtests(
   signals = "f1_breadth_change",
   methods = c("cs", "ew", "rp"),
   double_sort = c("f1_breadth_change", "mom_12_1"),
+  reference_signals = "mom_12_1",
   log_path = file.path("logs", "tests"),
   verbose = TRUE
 )
@@ -24,6 +25,10 @@ robust only if it holds under all three).}
 
 \item{double_sort}{Character pair \code{c(signal, conditioner)} for the dependent double
 sort (memo Section 8, verdict 3), run under \code{cs}.}
+
+\item{reference_signals}{Character vector, signals backtested under \code{cs} as a
+reference for reading the results (design \code{"reference"}; momentum by default), not
+as tested hypotheses.}
 
 \item{log_path}{Character scalar, folder for the data-quality log.}
 
