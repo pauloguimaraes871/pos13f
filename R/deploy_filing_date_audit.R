@@ -2,9 +2,9 @@
 #'
 #' Draws filings at random (fixed seed) from `silver_filings`, originals and amendments
 #' from every quarter, reads their EDGAR index pages and pins the comparison under
-#' `silver_filing_date_audit`. It stops if any read filing was accepted at or after 4 pm
-#' Eastern on its usable date, which would mean a portfolio formed at that close could
-#' use a filing before it was public.
+#' `silver_filing_date_audit`. It stops if any sampled filing was accepted at or after
+#' 4 pm Eastern on its usable date, which would mean a portfolio formed at that close
+#' could use a filing before it was public, and if any sampled page cannot be read.
 #'
 #' @param board A `pins_board` from [init_pipeline_board()].
 #' @param n Numeric scalar, filings sampled.
@@ -16,6 +16,9 @@
 deploy_filing_date_audit <- function(board, n = 300, seed = 20261108, verbose = TRUE) {
   # Validate inputs
   if (!inherits(board, "pins_board")) stop("board must be a pins board (init_pipeline_board()).")
+  if (!is.numeric(n) || length(n) != 1 || is.na(n) || n < 1) {
+    stop("n must be a single number of filings to sample, at least 1.")
+  }
 
   filings <- pins::pin_read(board, "silver_filings")
   sample <- withr::with_seed(seed, dplyr::slice_sample(filings, n = min(n, nrow(filings)))) |>
@@ -32,8 +35,12 @@ deploy_filing_date_audit <- function(board, n = 300, seed = 20261108, verbose = 
       paste(late$accession_number, collapse = ", "), "."
     )
   }
-  if (audit$summary$n_read < 0.9 * audit$summary$n_sampled) {
-    stop("Fewer than 90% of the sampled EDGAR pages could be read; rerun later.")
+  ## An unread page cannot pass the check, so every sampled filing must be read
+  if (audit$summary$n_read < audit$summary$n_sampled) {
+    stop(
+      audit$summary$n_sampled - audit$summary$n_read,
+      " sampled EDGAR pages could not be read; rerun later."
+    )
   }
   inputs <- list(silver_filings = pins::pin_meta(board, "silver_filings")$local$version)
   save_local_pin(board, audit$rows, "silver", "filing_date_audit",

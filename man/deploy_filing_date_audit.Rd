@@ -21,7 +21,7 @@ Character scalar, the version of \code{silver_filing_date_audit}.
 \description{
 Draws filings at random (fixed seed) from \code{silver_filings}, originals and amendments
 from every quarter, reads their EDGAR index pages and pins the comparison under
-\code{silver_filing_date_audit}. It stops if any read filing was accepted at or after 4 pm
-Eastern on its usable date, which would mean a portfolio formed at that close could
-use a filing before it was public.
+\code{silver_filing_date_audit}. It stops if any sampled filing was accepted at or after
+4 pm Eastern on its usable date, which would mean a portfolio formed at that close
+could use a filing before it was public, and if any sampled page cannot be read.
 }
