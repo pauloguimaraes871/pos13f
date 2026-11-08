@@ -10,9 +10,9 @@
 #'   `ladder`, `costs`, `persistence`, `momentum`, `summary`, `rank_ic`,
 #'   `rank_ic_by_formation`, `monotonicity`, `inference`, `spreads`, `benchmark`,
 #'   `extremes`, `data_quality`, `file_rows`, `audit` (the filing-date audit rows),
-#'   `cohort_exclusions`, `combination`, `leave_one_year_out`, `capm` (CAPM alpha of
-#'   each spread), `uncertainty` (interval of each mean and minimum detectable effects)
-#'   and `lineage`.
+#'   `cohort_exclusions`, `combination`, `leave_one_year_out`, `leg_betas`, `capm`
+#'   (CAPM alpha of each spread), `uncertainty` (interval of each mean and minimum
+#'   detectable effects) and `lineage`.
 #' @export
 build_report_tables <- function(board) {
   # Validate inputs
@@ -36,7 +36,8 @@ build_report_tables <- function(board) {
     persistence = report_signal_persistence(signals),
     momentum = report_momentum_context(read("bronze_ff_factors_m")),
     summary = summary,
-    uncertainty = report_spread_uncertainty(summary),
+    uncertainty = report_spread_uncertainty(summary, spreads),
+    leg_betas = report_leg_betas(ladder, read("bronze_ff_factors_m")),
     capm = report_capm_alphas(spreads, read("bronze_ff_factors_m")),
     rank_ic = read("backtests_rank_ic"),
     rank_ic_by_formation = read("backtests_rank_ic_by_formation"),

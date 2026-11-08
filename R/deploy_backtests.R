@@ -48,7 +48,7 @@ deploy_backtests <- function(board, signals = "f1_breadth_change", methods = c("
   keep <- function(cohort, signal, method, design) {
     assign(paste(signal, method, design, sep = "_"), cohort, envir = cohorts)
     extract_ladder_returns(cohort) |>
-      dplyr::mutate(signal = signal, method = method, design = design)
+      dplyr::mutate(signal = .env$signal, method = .env$method, design = .env$design)
   }
   ladders <- purrr::pmap(grid, function(signal, method) {
     if (verbose) message("Backtest: ", signal, " under ", method)
