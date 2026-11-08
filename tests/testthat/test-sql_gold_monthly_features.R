@@ -47,3 +47,15 @@ test_that("Amihud skips days without volume instead of turning NaN or infinite",
   expect_true(all(is.finite(after$amihud[3:4])))
   expect_equal(after$amihud[1:3], before$amihud[1:3])
 })
+
+test_that("presence counts traded days, so a stale zero-volume row is not present", {
+  con <- features_con_fixture()
+  before <- dplyr::filter(monthly_features(con), .data$instrument_id == "FIGI_AAA")
+  updated <- DBI::dbExecute(con, paste(
+    "UPDATE prices SET dollar_volume = 0 WHERE instrument_id = 'FIGI_AAA'",
+    "AND date = DATE '2020-09-15'"
+  ))
+  expect_equal(updated, 1)
+  after <- dplyr::filter(monthly_features(con), .data$instrument_id == "FIGI_AAA")
+  expect_equal(after$presence[4], before$presence[4] - 100 / 63)
+})

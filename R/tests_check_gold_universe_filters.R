@@ -8,7 +8,8 @@
 #'
 #' @param panels Named list from `build_gold_panels()` (uses `signals_m_df` and
 #'   `universe_diagnostics`).
-#' @param n_universe,min_price,min_history_days Numeric scalars, the universe screens.
+#' @param n_universe,min_price,min_history_days,min_presence Numeric scalars, the
+#'   universe screens.
 #' @param max_membership_turnover Numeric scalar, largest share of a formation's members
 #'   that were not members at the previous formation (observed 2026-11-08: at most 0.08).
 #' @param max_reentry_share Numeric scalar, largest share of member rows that return after
@@ -17,12 +18,15 @@
 #' @return `NULL`, invisibly; called for its `testthat` expectations.
 #' @noRd
 check_gold_universe_filters <- function(panels, n_universe, min_price, min_history_days,
-                                        max_membership_turnover, max_reentry_share) {
+                                        min_presence, max_membership_turnover,
+                                        max_reentry_share) {
   universe <- panels$universe_diagnostics
   members <- dplyr::filter(universe, .data$in_universe)
 
   testthat::test_that("every exclusion reason matches an independent recomputation", {
-    expected <- expect_universe_reasons(universe, n_universe, min_price, min_history_days)
+    expected <- expect_universe_reasons(universe, n_universe, min_price, min_history_days,
+      min_presence = min_presence
+    )
     compared <- universe |>
       dplyr::select("formation_date", "instrument_id", "excluded_reason", "liquidity_rank") |>
       dplyr::inner_join(expected,
@@ -36,6 +40,7 @@ check_gold_universe_filters <- function(panels, n_universe, min_price, min_histo
 
   testthat::test_that("no universe member breaks a screen", {
     testthat::expect_true(all(members$close_prev >= min_price))
+    testthat::expect_true(all(members$presence >= min_presence))
     testthat::expect_true(all(members$date == members$formation_date))
     testthat::expect_true(all(members$formation_date - members$first_date >= min_history_days))
     testthat::expect_true(all(2 * members$n_match > members$n_curr))

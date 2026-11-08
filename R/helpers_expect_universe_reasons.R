@@ -11,8 +11,8 @@
 #'   `instrument_id`, `ticker`, breadth counts (`n_prev`, `n_curr`, `n_init`, `n_match`),
 #'   `date` (last price day up to t), `close_prev` (USD), `first_date`, and the feature
 #'   columns.
-#' @param n_universe,min_price,min_history_days,max_init_share,min_holders_break Numeric
-#'   scalars, the screens of `build_gold_universe()` (same defaults).
+#' @param n_universe,min_price,min_history_days,max_init_share,min_holders_break,min_presence
+#'   Numeric scalars, the screens of `build_gold_universe()` (same defaults).
 #'
 #' @return A tibble with `formation_date`, `instrument_id`, `expected_reason` (`NA` for
 #'   members) and `expected_rank` (liquidity rank among eligible rows, `NA` otherwise).
@@ -23,11 +23,11 @@
 #' @noRd
 expect_universe_reasons <- function(universe, n_universe = 1000, min_price = 5,
                                     min_history_days = 365, max_init_share = 0.5,
-                                    min_holders_break = 20) {
+                                    min_holders_break = 20, min_presence = 90) {
   feature_cols <- c("close_prev", "median_volfin_3m", "mom_12_1", "rev_1m", "vol_3m", "amihud")
   screens <- c(
     "no_price_source", "identity_unverifiable", "identity_rejected", "cusip_change_suspect",
-    "not_traded_at_t", "price_below_min", "short_history", "missing_features"
+    "not_traded_at_t", "price_below_min", "low_presence", "short_history", "missing_features"
   )
 
   # One failure flag per screen; NA means "not failed"
@@ -43,6 +43,7 @@ expect_universe_reasons <- function(universe, n_universe = 1000, min_price = 5,
         .data$n_init > max_init_share * .data$n_curr,
       not_traded_at_t = is.na(.data$date) | .data$date != .data$formation_date,
       price_below_min = .data$close_prev < min_price,
+      low_presence = .data$presence < min_presence,
       short_history = as.numeric(.data$formation_date - .data$first_date) < min_history_days,
       missing_features = rowSums(is.na(dplyr::pick(dplyr::all_of(feature_cols)))) > 0
     )

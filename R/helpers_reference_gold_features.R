@@ -61,7 +61,7 @@ reference_gold_features <- function(targets, prices_d, returns_d) {
   long <- over_window(63, 1,
     mean_volfin_3m = mean(.data$dollar_volume),
     median_volfin_3m = stats::median(.data$dollar_volume),
-    presence = 100 * sum(!is.na(.data$date)) / 63, vol_3m = stdev(.data$ret),
+    presence = 100 * sum(.data$dollar_volume > 0, na.rm = TRUE) / 63, vol_3m = stdev(.data$ret),
     amihud = 1e6 * mean_or_na((abs(.data$ret) / .data$dollar_volume)[.data$dollar_volume > 0])
   )
   short <- over_window(21, 1, daily_vol = stdev(.data$ret), rev_1m = compound(.data$ret))

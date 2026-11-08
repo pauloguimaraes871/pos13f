@@ -18,8 +18,9 @@
 #' @param relations Tibble pinned as `silver_filing_relations`.
 #' @param reference Named list from `build_gold_reference()`.
 #' @param n_universe Numeric scalar, the universe size of plan 1.8.
-#' @param min_price,min_history_days,min_positions Numeric scalars, the screens of
-#'   `build_gold_universe()` and `select_gold_cohort()` (5 USD, 365 days, 10 positions).
+#' @param min_price,min_history_days,min_presence,min_positions Numeric scalars, the
+#'   screens of `build_gold_universe()` and `select_gold_cohort()` (5 USD, 365 days, 90
+#'   percent of traded days, 10 positions).
 #' @param max_membership_turnover,max_reentry_share Numeric scalars, bounds on how
 #'   fast universe membership changes (see `check_gold_universe_filters()`).
 #' @param min_universe_share Numeric scalar, smallest universe as a share of
@@ -32,7 +33,7 @@
 run_test_gold <- function(panels, cohort, benchmark_d, benchmark_m, formations, filings,
                           versions, relations, reference, n_universe = 1000,
                           min_universe_share = 0.9, max_cohort_change = 0.25, min_price = 5,
-                          min_history_days = 365, min_positions = 10,
+                          min_history_days = 365, min_presence = 90, min_positions = 10,
                           max_membership_turnover = 0.15,
                           max_reentry_share = 0.03) {
   key <- c("id", "tickers", "dates")
@@ -51,6 +52,12 @@ run_test_gold <- function(panels, cohort, benchmark_d, benchmark_m, formations, 
       finite <- purrr::map_lgl(m[-(1:3)], \(x) all(is.finite(x) | is.na(x) & !is.nan(x)))
       testthat::expect_true(all(finite))
     }
+  })
+
+  testthat::test_that("liquidity used for trading costs is positive on every row", {
+    ## factoRverse divides each order by mean_volfin_3m: zero gives NaN costs
+    testthat::expect_true(all(panels$liquidity_m_df$mean_volfin_3m > 0))
+    testthat::expect_true(all(panels$volatility_m_df$daily_vol >= 0))
   })
 
   testthat::test_that("panels share rows and only unfinished returns are missing", {
@@ -112,7 +119,7 @@ run_test_gold <- function(panels, cohort, benchmark_d, benchmark_m, formations, 
   })
 
   check_gold_universe_filters(
-    panels, n_universe, min_price, min_history_days,
+    panels, n_universe, min_price, min_history_days, min_presence,
     max_membership_turnover, max_reentry_share
   )
   check_gold_cohort_filters(cohort, filings, versions, relations, formations, min_positions)

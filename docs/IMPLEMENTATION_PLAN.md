@@ -320,7 +320,8 @@ fewer than 10 positions are excluded.
   `gold_cohort`, `gold_daily_returns_d`, `gold_benchmark_d`, `gold_benchmark_m` (SPY).
 - Universe order at each formation: price source, identity accepted at t from the
   holdings versions current at t (D2), not a suspected CUSIP change (D9), traded at t,
-  previous close >= 5 USD, 12 months of history, complete features, top 1000 by
+  previous close >= 5 USD, traded on at least 90% of the previous 63 trading days
+  (D11), 12 months of history, complete features, top 1000 by
   previous 63-day median dollar volume (ties by FIGI), then zero holders in q-1 or q
   removed (D5).
 - Gold suite (`run_test_gold()`, added 2026-11-08), beyond the contract checks: every

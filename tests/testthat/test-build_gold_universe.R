@@ -58,3 +58,19 @@ test_that("a stock not traded at t or with a short history is excluded", {
   universe <- build_gold_universe(gold_formations(), x$breadth, features, terminal, x$master)
   expect_equal(universe$excluded_reason[1:2], c("not_traded_at_t", "short_history"))
 })
+
+test_that("a stale stock traded on under 90% of recent days is excluded before ranking", {
+  ## FIGI_1 still has a price every day but traded on 47 of the previous 63 days (a
+  ## frozen price after a cash takeover); FIGI_2 traded on 57 of 63 days and passes
+  x <- universe_inputs()
+  features <- dplyr::mutate(x$features, presence = dplyr::case_when(
+    .data$instrument_id == "FIGI_1" ~ 100 * 47 / 63,
+    .data$instrument_id == "FIGI_2" ~ 100 * 57 / 63,
+    .default = .data$presence
+  ))
+  universe <- build_gold_universe(gold_formations(), x$breadth, features, x$terminal, x$master,
+    n_universe = 2
+  )
+  expect_equal(universe$excluded_reason[1:2], c("low_presence", NA))
+  expect_true(is.na(universe$liquidity_rank[1]))
+})
