@@ -5,6 +5,9 @@
 #' @importFrom rlang .data .env :=
 ## usethis namespace: end
 
+## crayon and tictoc are in Imports without being called here: factoRverse calls them at
+## run time, even with verbose = FALSE, and lists them only in its Suggests
+
 ## mockable bindings: start
 ## mockable bindings: end
 
