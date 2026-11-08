@@ -24,7 +24,9 @@ rules were fixed before any data was downloaded: see
 ## Quick start
 
 ```r
-# 1. Restore the package library recorded in renv.lock
+# 1. Restore the package library recorded in renv.lock. factoRverse 0.9.1 (the
+#    backtest engine) is installed from vendor/factoRverse_0.9.1.tar.gz, which the
+#    lockfile records as a local source: no GitHub access or manual step is needed.
 renv::restore()
 
 # 2. Add the three keys to your user-level .Renviron (template: .Renviron.example),
@@ -38,6 +40,10 @@ targets::tar_make()
 ## Reproduction requirements
 
 * R (4.5 or later) and the packages pinned in `renv.lock`; on Windows, Rtools.
+* factoRverse 0.9.1 ships in `vendor/`: the owner's factoRverse at upstream commit
+  `8f31959` with its signal-selection and machine-learning dependencies (brms, lme4,
+  xgboost and others) moved to Suggests and its images and tests left out of the build;
+  the portfolio backtest code is unchanged. `renv::restore()` installs it.
 * `SEC_USER_AGENT`: a name and contact email, as SEC EDGAR requires.
 * `TIINGO_API_KEY` on a paid Tiingo plan (Power) for full daily price history.
 * `OPENFIGI_API_KEY` (free) for CUSIP to FIGI mapping.

@@ -12,12 +12,10 @@ Encoding: UTF-8
 Language: en-US
 Roxygen: list(markdown = TRUE)
 Suggests: 
-    frenchdata,
     ggplot2,
     knitr,
     lmtest,
     quarto,
-    sandwich,
     tarchetypes,
     targets,
     zip
@@ -27,6 +25,8 @@ Imports:
     dbplyr,
     dplyr (>= 1.1.0),
     duckdb,
+    factoRverse (>= 0.9.1),
+    frenchdata,
     httr2,
     jsonlite,
     lubridate,
@@ -35,11 +35,14 @@ Imports:
     purrr,
     readr,
     rlang,
+    sandwich,
     stringr,
     testthat (>= 3.0.0),
     tibble,
     tidyr,
     utils,
-    withr
+    withr,
+    xts,
+    zoo
 Depends: 
     R (>= 4.1.0)
