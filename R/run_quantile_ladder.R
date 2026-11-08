@@ -23,6 +23,13 @@
 #'   `<label>_q<n>`, each with the weighted average of `signal` as a portfolio metric.
 #'
 #' @details
+#' The bottom portfolio is the short leg, so it is scored on the negated signal
+#' (factoRverse position `"short"`): its top quantile of `-signal` is the bottom quantile
+#' of `signal`, and under `cs` the weights then grow with conviction in the short
+#' direction (most negative signal) times liquidity. Scored on the signal itself, `cs`
+#' would put the largest short weights on the least negative names. The other portfolios
+#' are scored on the signal. `ew` and `rp` weights do not use the score.
+#'
 #' Rebalancing in March, June, September and December (the holding months that start
 #' after each formation), weights drift in between. Market impact is set negligible
 #' (`alpha = 1e-6`): trading costs are flat per dollar traded, as pre-registered, and
@@ -43,9 +50,14 @@ run_quantile_ladder <- function(inputs, signal, method = "cs", n_quantiles = 5, 
     meta_dataframe_name = signal
   )
   runs <- purrr::map(seq_len(n_quantiles), function(k) {
+    ## The bottom portfolio is the top quantile of the negated signal
+    short_leg <- k == 1
+    range <- if (short_leg) c(1 - 1 / n_quantiles, 1) else c(k - 1, k) / n_quantiles
+    position <- if (short_leg) "short" else "long"
     config <- factoRverse::create_port_backtest_config(
-      chosen_score_metric_and_position = stats::setNames("long", signal),
-      eligibility_quantile_range = c(k - 1, k) / n_quantiles, initial_buffer_period = 1,
+      chosen_score_metric_and_position = stats::setNames(position, signal),
+      eligibility_quantile_range = range,
+      initial_buffer_period = 1,
       rebalancing_months = c(3, 6, 9, 12), port_construction_method = method,
       main_liquidity_metric = "mean_volfin_3m", config_name = paste0(label, "_q", k),
       ## 240 trading days stay inside every member's life (365 calendar days of history)

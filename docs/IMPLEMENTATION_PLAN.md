@@ -469,6 +469,24 @@ Pass / fail actions (fixed now):
    10M per day. Parameters: `strategy_aum`, `max_participation`, `exec_days`;
    report how many stocks pass per formation and the F1 result by AUM level.
 
+7. Continuous integration (registered 2026-11-08 by the owner): GitHub Actions on every
+   push restores renv (with `vendor/factoRverse_0.9.1.tar.gz`) and runs
+   `devtools::check()` and the unit tests, which need no keys or network. Extension:
+   test-coverage (`covr`) and lint (`lintr`) workflows with README badges.
+8. Additional signals, each a separate trial counted in the deflated Sharpe (owner,
+   2026-11-08), each one new column of `gold_signals_m_df` run through the same
+   `deploy_backtests()`:
+   - F1b: change in institutional ownership measured by value traded instead of
+     holder counts (definition to be agreed with the owner before any run).
+   - F1c: relative breadth change, net new holders divided by the stock's own holders
+     in q-1. F1 divides by the cohort size, a constant per formation, so its extremes
+     are widely held stocks; F1c removes that structural size tilt.
+9. Costs session (owner, 2026-11-08): turnover by leg and through time, cost through
+   time, cost under different formulations (flat fee, square-root impact of item 3,
+   realistic fees and general-collateral borrow next to the pre-registered scenarios),
+   and smoothing the signal over two quarters to raise its persistence (F1's
+   formation-to-formation rank autocorrelation is 0.11) and cut turnover.
+
 Not this weekend: F2 to F5, F3 skill ranking, Fama-MacBeth, XBRL market cap,
 cap-weighted benchmark, USD 1B capacity, free-tier reproduction mode.
 

@@ -48,6 +48,13 @@ portfolio sort is a non-parametric estimate of that relation. Q1 holds the lowes
 scores and Qn the highest; the long-short spread is Qn minus Q1.
 }
 \details{
+The bottom portfolio is the short leg, so it is scored on the negated signal
+(factoRverse position \code{"short"}): its top quantile of \code{-signal} is the bottom quantile
+of \code{signal}, and under \code{cs} the weights then grow with conviction in the short
+direction (most negative signal) times liquidity. Scored on the signal itself, \code{cs}
+would put the largest short weights on the least negative names. The other portfolios
+are scored on the signal. \code{ew} and \code{rp} weights do not use the score.
+
 Rebalancing in March, June, September and December (the holding months that start
 after each formation), weights drift in between. Market impact is set negligible
 (\code{alpha = 1e-6}): trading costs are flat per dollar traded, as pre-registered, and
