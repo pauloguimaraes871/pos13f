@@ -24,6 +24,7 @@ Imports:
     DBI,
     dbplyr,
     dplyr (>= 1.1.0),
+    crayon,
     duckdb,
     factoRverse (>= 0.9.1),
     frenchdata,
@@ -39,6 +40,7 @@ Imports:
     stringr,
     testthat (>= 3.0.0),
     tibble,
+    tictoc,
     tidyr,
     utils,
     withr,
@@ -46,3 +48,5 @@ Imports:
     zoo
 Depends: 
     R (>= 4.1.0)
+Remotes:
+    factoRverse=local::vendor/factoRverse_0.9.1.tar.gz
