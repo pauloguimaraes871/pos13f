@@ -142,5 +142,16 @@ list(
       bronze_tiingo
       deploy_silver_prices(init_pipeline_board(board_path), verbose = FALSE)
     }
+  ),
+
+  ## Gold: cohort, universe, F1 and the panels run_port_backtest() consumes
+  targets::tar_target(
+    gold,
+    {
+      silver_filings
+      silver_holdings
+      silver_prices
+      deploy_gold(init_pipeline_board(board_path), verbose = FALSE)
+    }
   )
 )

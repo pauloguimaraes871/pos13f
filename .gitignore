@@ -21,3 +21,6 @@ logs/
 
 # Rendered report: rebuilt by targets; the submission copy is force-added at CP4
 inst/report/*.html
+
+# Literature PDFs: copyrighted, kept locally only
+papers/
