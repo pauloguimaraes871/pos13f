@@ -1,0 +1,41 @@
+# Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
+# Coverage is measured with covr and written to the job summary. It is not uploaded to
+# an external service: the repository is private and needs no third-party token.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+name: test-coverage.yaml
+
+permissions: read-all
+
+jobs:
+  test-coverage:
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      # The renv autoloader in .Rprofile must not take over the library on CI
+      RENV_CONFIG_AUTOLOADER_ENABLED: false
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::covr
+          needs: coverage
+
+      - name: Measure test coverage
+        run: |
+          cov <- covr::package_coverage(quiet = FALSE, clean = FALSE)
+          pct <- covr::percent_coverage(cov)
+          print(cov)
+          cat(sprintf("## Test coverage\n\n%.1f%% of package lines are run by the unit tests.\n", pct),
+            file = Sys.getenv("GITHUB_STEP_SUMMARY"), append = TRUE)
+        shell: Rscript {0}
