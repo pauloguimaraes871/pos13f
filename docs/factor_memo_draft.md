@@ -117,7 +117,13 @@ arrive weeks later.
 ## 7. Backtest design
 
 - Quarterly formation (end of Feb, May, Aug, Nov), execution at close of t, returns
-  from t+1, weights drift between formations.
+  from t+1, weights drift between formations. Timing checked on 2026-11-08 against the
+  delay from quarter end to `usable_date` of every original 13F-HR (2014 to 2026): 66%
+  of filings are usable by day 45, 93% by day 48, 96% by day 50 and 97% at month end
+  (day 59 to 62). Filings bunch just before the day-45 deadline. Month end is kept
+  (owner, 2026-11-08): it loses almost no reports and fits the monthly grid of the
+  backtest code; the cost is about ten trading days of freshness, so any price reaction
+  between the deadline and month end is outside the test (conservative for F1).
 - Top minus bottom quintile, `cs` weights, dollar neutral.
 - Costs: 10, 25, 50 bps one-way per dollar traded, break-even cost, borrow fee
   0 and 100 bps per year on the short leg.
@@ -148,8 +154,18 @@ Minimum economically relevant effect: 2% per year gross long-short alpha.
 
 ## 9. Literature still to verify or add
 
-- Chen, Hong & Stein (2002): sample period, spread values and exact breadth
-  definition (digits are font-encoded in the supplied PDF; render the pages).
+- Chen, Hong & Stein (2002, JFE 66, p. 180) **[src]**: DBREADTH is the number of funds
+  holding the stock at t minus at t-1, among funds in the sample at both dates,
+  divided by all funds at t-1; IN and OUT decompose it. Sample period and spread
+  values still to note.
+- Nagel (2005, JFE 78, pp. 295 to 296) **[src]**: after CHS's sample ends in 1998,
+  stocks with falling breadth outperformed those with rising breadth by a large
+  margin, almost eliminating the effect over 1980 to 2003. Our sample (2013 to 2026)
+  lies entirely after that reversal: a null or negative F1 result is a live outcome.
+- Jegadeesh & Titman (1993, JF 48, p. 68) **[src]**: formation of 1 to 4 quarters,
+  optionally skipping one week; the 12-1 month control follows later momentum-factor
+  practice **[mem]**. Amihud (2002, JFM 5, p. 34, eq. 1) **[src]**: illiquidity is the
+  average of absolute daily return over dollar volume.
 - Gompers & Metrick (2001, QJE), "Institutional investors and equity prices": the
   supplied ssrn-278920 is Gompers, Ishii & Metrick (2003), a different paper.
 - Bushee (1998, 2001); Miller (1977); Nagel (2005); Shumway (1997) delisting
@@ -192,6 +208,35 @@ Each entry: date, change, reason. Details in `data-raw/spike/G1_report.md`.
   reported by quarter and portfolio side, not corrected. Reason: no ticker history in the
   free data; the implied-price check shows 99.96% agreement on liquid, well-held stocks,
   so a permaTicker download was judged not worth it (owner, 2026-11-07).
+- 2026-11-07 (D9). An instrument with at least 20 quarter-q cohort holders, more than
+  half of them initiations, is a suspected CUSIP change and leaves the universe for
+  that formation. Reason: the largest F1 values were all corporate actions (GOOGL
+  2016, RTX 2020, GE 2021, MDT 2015, BKNG 2018, BLK 2025) whose old CUSIP maps to
+  another FIGI, so holders switching CUSIP looked like initiations; Plan 1.6 already
+  treats such breaks as leaving the signal. A data-quality rule set before any return
+  was computed; threshold chosen by Claude, open to the owner. The label is a heuristic
+  flag, not a confirmed corporate action. Impact (gold pins of 2026-11-08): 455
+  instrument-formations that were seasoned and liquid enough for the universe (median 8
+  per formation, at most 25); a further 438 liquid rows are IPOs, which the
+  12-month history screen would drop anyway but which carry this label because D9 is
+  checked first.
+- 2026-11-07 (D10). F1 divides by the matched cohort size, while Chen, Hong & Stein
+  divide by all funds at q-1. Within a formation both scale every stock by the same
+  factor, so ranks and quintile portfolios are identical.
+- 2026-11-08. Correction, not a design change: the 63-day Amihud illiquidity averaged
+  days with zero dollar volume, giving NaN (0/0) or infinity. The NaN alone caused every
+  `missing_features` universe exclusion (18,214 candidate rows, 40 of them liquid
+  enough for the universe). Amihud now averages over days with volume, as in Amihud
+  (2002). Found by the dplyr recomputation of the real-data toy sample, before any
+  return was computed.
+- 2026-11-08. Correction from the Codex gold review, before any return was computed:
+  the overlap rule (Plan 1.4) read inclusion links from every filing of quarter q usable
+  by t, including filings a restatement had superseded, and ignored q-1. It now reads
+  links only from the filings that make up each report version current at t, for both
+  compared quarters, and drops the smaller report of a pair in either quarter. Overlap
+  exclusions rose from 8,052 to 8,658 filer-formations (619 left the cohort, 13
+  re-entered, 0.3% of members); pooled rank correlation of F1 with the previous build
+  0.9994. The "drop both" sensitivity of Plan 1.4 is not implemented.
 - 2026-11-07 (D8). The implied-price check counts the filers whose value per share lies
   within 0.5 to 2 times Tiingo's raw close and accepts when most do, instead of the
   median of D6. Reason: same intent, and counts stream over 77 million rows where a

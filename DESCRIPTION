@@ -20,7 +20,6 @@ Suggests:
     sandwich,
     tarchetypes,
     targets,
-    withr,
     zip
 Config/testthat/edition: 3
 Imports:
@@ -39,6 +38,8 @@ Imports:
     stringr,
     testthat (>= 3.0.0),
     tibble,
-    tidyr
+    tidyr,
+    utils,
+    withr
 Depends: 
     R (>= 4.1.0)

@@ -207,6 +207,9 @@ full window):
   **and** files its own holdings report for the same quarter, the pair is flagged as
   overlapping; MVP rule: keep the larger report, drop the other from the cohort for
   that quarter. The count and value affected are reported; a sensitivity drops both.
+  Implemented (2026-11-08) for both compared quarters, with links read only from the
+  filings of each report version current at t (`find_overlap_drops()`); the
+  sensitivity is not implemented.
 
 ### 1.5 Value units
 
@@ -295,6 +298,48 @@ cross-section. Terciles are recomputed per quarter (no full-sample cut-offs); on
 flag per filer per formation applies to both endpoints of that change. Filers with
 fewer than 10 positions are excluded.
 
+### 1.10 Gold layer: factoRverse inputs (implemented 2026-11-07, Codex-reviewed design)
+
+- Pins are plain data frames in factoRverse `meta_dataframe` layout: `id`, `tickers`,
+  `dates` first, `id = paste0(tickers, "-", dates)`, rows sorted by `id`, `tickers` =
+  composite FIGI, only numeric columns after the key. The backtest layer wraps them
+  with `create_meta_dataframe()` / `create_meta_xts()`.
+- `dates` = first day of the holding month: a row dated 2020-09-01 carries what was
+  known at the close of 2020-08-31; its forward return is September's. The formation's
+  universe and signal are frozen for the three holding months (quarterly buy-and-hold).
+  Backtest settings: `rebalancing_months = c(3, 6, 9, 12)`; daily returns must be cut
+  at the formation date before factoRverse estimates covariances (its slice includes
+  `current_date`).
+- Panels (pipeline names): `gold_signals_m_df` (F1, breadth level, holders, IN and OUT,
+  cohort size, momentum 12-1, reversal 1m, volatility 3m, Amihud, signal age),
+  `gold_fwd_1m_returns_m_df` (`fwd_return_1m`, `fwd_return_1m_stress`, percentage
+  points, compounded daily total returns; 0 after the last price; NA only in the
+  unfinished last month), `gold_liquidity_m_df` (`mean_volfin_3m` for factoRverse
+  costs, `median_volfin_3m` for the universe, `presence`, `close_prev`),
+  `gold_volatility_m_df` (`daily_vol`, `vol_3m`). Companions: `gold_universe_diagnostics`,
+  `gold_cohort`, `gold_daily_returns_d`, `gold_benchmark_d`, `gold_benchmark_m` (SPY).
+- Universe order at each formation: price source, identity accepted at t from the
+  holdings versions current at t (D2), not a suspected CUSIP change (D9), traded at t,
+  previous close >= 5 USD, 12 months of history, complete features, top 1000 by
+  previous 63-day median dollar volume (ties by FIGI), then zero holders in q-1 or q
+  removed (D5).
+- Gold suite (`run_test_gold()`, added 2026-11-08), beyond the contract checks: every
+  universe exclusion reason is recomputed independently (first failing screen from a
+  long table of failure flags, rank by sorting) and must match on every row; no member
+  breaks a screen; the liquidity cut is a clean boundary; the panels hold exactly the
+  members; membership turnover between formations stays below 15% and one-formation
+  re-entries below 3% of member rows (observed 8% and 1.4%). Cohort: both reports
+  re-read as public at t from `silver_filings`, few-positions and index-like labels
+  recomputed, every filer with both report versions current at t present in the cohort
+  table, every overlap drop linked to an inclusion in a report current at t, and the
+  position counts of 20 random cohort filers recomputed in dplyr. A stratified random
+  sample of 40 panel rows (seed 20261108; regular, last-price month, first formation,
+  fewest holders, third month of a signal; every stratum with rows must be drawn) is
+  recomputed from silver in dplyr (breadth, F1, identity count, features, forward
+  returns) and must match the SQL. Unit tests run the
+  same references on `toy_silver_gold.rds`, a real-data sample built by
+  `data-raw/make_toy_gold_fixture.R`.
+
 ---
 
 ## 2. Schedule
@@ -382,6 +427,19 @@ Pass / fail actions (fixed now):
 4. Disclosure-lagged performance profile: F1 portfolio returns in months 1 to 12
    after formation (a diagnostic of decay, not F2).
 5. Activity-proxy split (high vs. low turnover filers).
+6. Capacity-based universe (registered 2026-11-07 by the owner; replaces the fixed top
+   1000 only as a sensitivity, logged as a deviation and counted as a trial). Given a
+   strategy size `strategy_aum` (USD), the average position of a diversified leg is
+   `position = strategy_aum * leg_gross / n_leg` (long and short legs each `leg_gross` =
+   1 of capital; `n_leg` from the quintile rule). A stock is eligible at formation t
+   only if trading it stays within a participation cap of its average daily dollar
+   volume: `traded_per_day <= max_participation * ADV`, with `max_participation` =
+   0.05 and ADV = `mean_volfin_3m` measured up to t-1. For a full entry or exit spread
+   over `exec_days` days, `traded_per_day = position / exec_days`, so the minimum is
+   `ADV_min = position / (max_participation * exec_days)`. Example: USD 100M,
+   `n_leg` = 200, `exec_days` = 1 gives a position of USD 0.5M and `ADV_min` = USD
+   10M per day. Parameters: `strategy_aum`, `max_participation`, `exec_days`;
+   report how many stocks pass per formation and the F1 result by AUM level.
 
 Not this weekend: F2 to F5, F3 skill ranking, Fama-MacBeth, XBRL market cap,
 cap-weighted benchmark, USD 1B capacity, free-tier reproduction mode.
