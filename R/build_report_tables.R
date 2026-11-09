@@ -9,7 +9,10 @@
 #' @return A named list of tibbles and lists: `coverage`, `filing_delay`, `universe`,
 #'   `ladder`, `costs`, `persistence`, `momentum`, `summary`, `rank_ic`,
 #'   `rank_ic_by_formation`, `monotonicity`, `inference`, `spreads`, `benchmark`,
-#'   `extremes`, `data_quality`, `file_rows` and `lineage`.
+#'   `extremes`, `data_quality`, `file_rows`, `audit` (the filing-date audit rows),
+#'   `cohort_exclusions`, `combination`, `leave_one_year_out`, `leg_betas`, `capm`
+#'   (CAPM alpha of each spread), `uncertainty` (interval of each mean and minimum
+#'   detectable effects) and `lineage`.
 #' @export
 build_report_tables <- function(board) {
   # Validate inputs
@@ -21,15 +24,21 @@ build_report_tables <- function(board) {
   signals <- read("gold_signals_m_df")
   ladder <- read("backtests_ladder_returns")
   spreads <- read("backtests_spreads")
+  summary <- read("backtests_summary")
+  cohort <- read("gold_cohort")
   list(
     coverage = report_filing_coverage(filings),
     filing_delay = report_filing_delay(filings),
-    universe = report_universe_composition(read("gold_universe_diagnostics"), read("gold_cohort")),
+    universe = report_universe_composition(read("gold_universe_diagnostics"), cohort),
+    cohort_exclusions = report_cohort_exclusions(cohort),
     ladder = report_ladder_table(ladder),
     costs = report_cost_summary(ladder, spreads),
     persistence = report_signal_persistence(signals),
     momentum = report_momentum_context(read("bronze_ff_factors_m")),
-    summary = read("backtests_summary"),
+    summary = summary,
+    uncertainty = report_spread_uncertainty(summary, spreads),
+    leg_betas = report_leg_betas(ladder, read("bronze_ff_factors_m")),
+    capm = report_capm_alphas(spreads, read("bronze_ff_factors_m")),
     rank_ic = read("backtests_rank_ic"),
     rank_ic_by_formation = read("backtests_rank_ic_by_formation"),
     monotonicity = read("backtests_monotonicity"),
@@ -41,6 +50,9 @@ build_report_tables <- function(board) {
     file_rows = report_pin_rows(
       board, c("bronze_tiingo_prices", "silver_prices_d", "gold_daily_returns_d")
     ),
+    audit = read("silver_filing_date_audit"),
+    combination = report_momentum_combination(spreads),
+    leave_one_year_out = report_leave_one_year_out(spreads),
     lineage = report_pin_lineage(board)
   )
 }

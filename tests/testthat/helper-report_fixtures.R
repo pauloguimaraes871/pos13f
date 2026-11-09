@@ -8,8 +8,11 @@ report_filings_fixture <- function() {
     period_of_report = as.Date(c(
       "2019-03-31", "2019-03-31", "2019-03-31", "2019-06-30", "2019-06-30", "2019-06-30"
     )),
-    submission_type = "13F-HR",
+    ## Amendments carry their own form type, as in the SEC data sets
+    submission_type = c("13F-HR", "13F-HR", "13F-HR", "13F-HR", "13F-HR", "13F-HR/A"),
     is_amendment = c(FALSE, FALSE, FALSE, FALSE, FALSE, TRUE),
+    ## The flag is blank on part of the real filings
+    is_confidential_omitted = c(FALSE, TRUE, NA, FALSE, FALSE, TRUE),
     usable_date = as.Date(c(
       "2019-05-10", "2019-05-16", "2019-08-01", "2019-08-15", "2019-08-14", "2019-09-01"
     ))

@@ -164,6 +164,16 @@ list(
     }
   ),
 
+  ## Filing-date audit: a random sample of filings checked against EDGAR acceptance times;
+  ## stops the pipeline if any filing could be used on or before the day it became public
+  targets::tar_target(
+    filing_date_audit,
+    {
+      silver_filings
+      deploy_filing_date_audit(init_pipeline_board(board_path), verbose = FALSE)
+    }
+  ),
+
   ## Bronze Fama-French factors: monthly FF5 and momentum for the alpha regressions
   targets::tar_target(
     bronze_ff_factors,
@@ -186,6 +196,7 @@ list(
     report_tables,
     {
       backtests
+      filing_date_audit
       build_report_tables(init_pipeline_board(board_path))
     }
   ),

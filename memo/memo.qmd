@@ -20,6 +20,8 @@ tb <- targets::tar_read(report_tables)
 s <- tb$summary
 row <- function(series, lag = 3) s[s$series == series & s$lag == lag, ]
 f <- function(x, d = 2) formatC(x, format = "f", digits = d, big.mark = ",")
+pct <- function(x, d = 1) paste0(formatC(100 * x, format = "f", digits = d), "%")
+n0 <- function(x) formatC(x, format = "d", big.mark = ",")
 ci <- function(r) paste0("[", f(12 * r$alpha_lo), ", ", f(12 * r$alpha_hi), "]")
 key <- "f1_breadth_change"
 sp <- function(method, design = "unconditional", tag = "spread_0_0", signal = key) {
@@ -41,8 +43,58 @@ pers <- tb$persistence
 lad <- tb$ladder[tb$ladder$signal == key & tb$ladder$design == "unconditional", ]
 top3 <- utils::head(tb$extremes[tb$extremes$side == "top", ], 3)
 top3$gain <- top3$n_holders_curr - top3$n_holders_prev
+cmb <- tb$combination
+audit <- tb$audit[!is.na(tb$audit$accepted_date), ]
+unc <- tb$uncertainty
+un <- function(tag) unc[unc$series == paste(key, "cs", "unconditional", tag, sep = "|"), ]
+u_gross <- un("spread_0_0")
+months <- cs$n_months
+u_net <- un("spread_25_100")
+ew_net <- sp("ew", tag = "spread_25_100")
+rp_net <- sp("rp", tag = "spread_25_100")
+exc <- tb$cohort_exclusions
+exc_of <- function(outcome, col) exc[[col]][exc$outcome == outcome]
+spy <- row("spy")
+ew_univ <- row("ew_universe")
+tv <- tb$costs$turnover
+tv <- tv[tv$signal == key & tv$design == "unconditional" & tv$method == "cs", ]
+conf <- tb$coverage
+## Sample description computed from the tables, so a demo render describes its own sample
+month_year <- function(d) paste(month.name[as.integer(format(d, "%m"))], format(d, "%Y"))
+first_month <- min(tb$spreads$dates)
+last_month <- max(tb$spreads$dates)
+n_formations <- length(unique(tb$rank_ic_by_formation$formation[tb$rank_ic_by_formation$signal == key]))
+audit_rd <- tb$audit[!is.na(tb$audit$accepted_date), ]
+audit_late <- audit_rd[!audit_rd$accepted_by_filing_date, ]
+audit_exception <- if (nrow(audit_late) == 0) {
+  "Every sampled filing was accepted no later than its filing date."
+} else {
+  paste0(
+    nrow(audit_late), " sampled filing", if (nrow(audit_late) > 1) "s were" else " was",
+    " accepted after its filing date (for example accession ", audit_late$accession_number[1],
+    ", filing date ", audit_late$filing_date[1], ", accepted ", audit_late$edgar_accepted[1],
+    " Eastern, usable from ", audit_late$usable_date[1], "). EDGAR can grant a filing date",
+    " earlier than the acceptance (a filing date adjustment). Each such filing was still",
+    " public before the close of its usable date."
+  )
+}
+lb <- tb$leg_betas
+leg_beta <- function(q) lb$beta[lb$signal == key & lb$method == "cs" & lb$design == "unconditional" & lb$quantile == q]
+loyo <- tb$leave_one_year_out
+ly <- loyo[loyo$signal == key & loyo$method == "cs" & loyo$design == "unconditional", ]
+tr <- tb$costs$by_rebalance
+tr <- tr[tr$signal == key & tr$design == "unconditional" & tr$method == "cs" & tr$quantile %in% c(1, 5), ]
+delay <- tb$filing_delay
+share_at <- function(d) delay$share_usable[delay$days == d]
+ter <- s[grepl("f1_breadth_change_in_mom_12_1\\|cs\\|tercile_[0-9]\\|spread_0_0", s$series) & s$lag == 3, ]
+ter <- ter[order(ter$series), ]
+reasons <- dplyr::summarise(tb$universe$reasons, n = sum(n), .by = "reason")
+reason_share <- function(r) sum(reasons$n[reasons$reason %in% r]) / sum(reasons$n)
 library(ggplot2)
-theme_set(theme_minimal(base_size = 9))
+theme_set(theme_minimal(base_size = 9) + theme(
+  panel.grid.minor = element_blank(), panel.grid.major.x = element_blank(),
+  legend.position = "top", legend.justification = "left"
+))
 ```
 
 This memo summarises the full technical report (`report/report.html`), which documents
@@ -61,7 +113,12 @@ accumulation by institutions as information diffuses (an underreaction and momen
 channel), informed institutional trading (Sias, Starks and Titman 2006), and short-sale
 constraints (Chen, Hong and Stein). The threat is that the signal was public for up to
 45 days before formation, and that Nagel (2005) found the breadth effect reversed after
-1998, before our sample starts.
+1998, before our sample starts. Four alternatives were considered and deferred
+(`docs/factor_memo_draft.md`, Section 3): persistent buying over several quarters, the
+breadth change of the best-performing filers, consensus best ideas, and crowding
+measured in days to liquidate. Each needs something F1 does not: a long-horizon return
+test, a skill ranking with its own timing problem, a benchmark weight per filer, or a
+reading of crowding as a risk premium rather than a signal.
 
 # Data and design
 
@@ -71,17 +128,101 @@ prices for live and dead tickers; OpenFIGI maps CUSIPs to permanent identifiers.
 tables) and gold (signals and panels), with a data-quality suite before each pin.
 
 - **Point in time.** A filing is usable the trading day after its filing date; amended
-  reports are versioned so a reader at date t sees only the versions current at t.
-- **Universe.** At each formation (end of February, May, August, November), the 1,000
-  most liquid US common stocks with a price above USD 5, a year of history, trading on
-  90% of recent days and a confirmed identity.
-- **Portfolios.** F1 quintiles, rebalanced quarterly and drifting in between, under
-  three weightings: cs (signal times liquidity, pre-registered), equal weight and risk
-  parity. The spread is the top minus the bottom quintile.
-- **Evaluation.** FF5 plus momentum (FF6) alpha with Newey-West standard errors, rank
-  IC per formation, a double sort within momentum terciles, a monotonicity test,
-  terminal-loss stress, and costs of 10 to 50 bps per dollar traded plus 100 bps borrow.
-  A credible signal must pass under all three weightings.
+  reports are versioned so a reader at date t sees only the versions current at t, and
+  a late report enters at the first formation after it is public. A random sample of
+  `r nrow(audit)` filings checked against EDGAR's acceptance times confirms that every
+  one was public before the close of its usable date, when the portfolio trades.
+- **Amendments and confidential treatment.** A restatement replaces its report and a
+  NEW HOLDINGS amendment adds positions to it, each from its own usable date. Positions
+  withheld under a confidential treatment request (declared on about
+  `r n0(round(mean(conf$n_confidential)))` original reports a quarter) are invisible
+  until an amendment reveals them, and that amendment enters only from its own usable
+  date, so nothing withheld is used early. The cost is that a withheld position reads as
+  an exit until it is revealed.
+- **Portfolios.** F1 quintiles, formed at the end of February, May, August and
+  November and held for three months with weights drifting in between; returns are
+  measured monthly. Three weighting schemes: cs (signal score times a liquidity score,
+  pre-registered), ew (equal weights) and rp (risk parity). The spread is the top minus
+  the bottom quintile, one dollar long and one dollar short.
+- **Evaluation.** The alpha of the monthly spread against the Fama-French five factors
+  plus momentum (UMD), called FF6 alpha, with Newey-West standard errors; the rank
+  information coefficient (IC) between F1 and next-quarter returns; a double sort within
+  momentum terciles; a monotonicity test; a terminal-loss stress; and fees of 10 to 50
+  bps per dollar traded plus a 100 bps borrow fee. The long legs are also compared with
+  SPY and with an equal-weight portfolio of the whole universe. A credible signal must
+  pass under all three weighting schemes.
+
+**Scope and what was excluded.** Filers: every 13F filer, then at each formation only
+those with a report for both quarters compared and at least 10 positions in each.
+Index-like filers (top third by number of positions and bottom third by turnover) are
+removed, because their holdings change with index membership and fund flows rather than
+views: about `r n0(round(exc_of("index_like", "mean_filers")))` filers per formation,
+`r pct(exc_of("index_like", "share_filers"), 0)` of filers but
+`r pct(exc_of("index_like", "share_value"), 0)` of 13F dollar value. When one report
+includes another manager that also files alone, the smaller report is dropped.
+Securities: US common stocks only (ETFs, ADRs, funds and options are out of scope); at
+each formation the 1,000 most liquid with a price above USD 5, a year of history,
+trading on 90% of recent days and a mapping confirmed by the holders' own prices.
+Window: report quarters 2013Q2 to 2026Q2. Short positions are not reported on 13F and
+are not modelled.
+
+```{r exclusions}
+ex_t <- exc
+ex_t$mean_filers <- n0(round(ex_t$mean_filers))
+ex_t$share_filers <- pct(ex_t$share_filers)
+ex_t$share_positions <- pct(ex_t$share_positions)
+ex_t$share_value <- pct(ex_t$share_value)
+ex_t$outcome <- c(
+  member = "Cohort member", index_like = "Index-like", few_positions = "Fewer than 10 positions",
+  overlap = "Included in another filer's report"
+)[ex_t$outcome]
+knitr::kable(ex_t, row.names = FALSE, align = "lrrrr", col.names = c(
+  "Filers at a formation", "Average number", "Share of filers", "Share of positions",
+  "Share of 13F value"
+))
+```
+
+Candidate stocks are all those held by the cohort, most of them small: on average
+`r pct(reason_share("member"), 0)` of candidate stock-formations enter the universe,
+`r pct(reason_share("below_liquidity_rank"), 0)` pass every screen but rank below the
+1,000 most liquid, and
+`r pct(reason_share(c("identity_unverifiable", "identity_rejected", "no_price_source")), 0)`
+fail the identity or price-source checks.
+
+## Point-in-time discipline
+
+The rule does not depend on the 45-day deadline. (1) Each filing gets a usable date,
+the first trading day after its filing date. (2) A report and its amendments form
+versions, each valid from the usable date of the filing that created it until the one
+that replaces it, so a reader at date t sees exactly the versions with
+valid_from <= t < valid_to. (3) At formation t the cohort, the holder counts and the
+overlap links use only those versions, for both quarters compared, and the portfolio
+trades at the close of t. (4) A late report enters at the first formation after its own
+usable date; until then its filer is outside the cohort, and a missing report is never
+read as an exit. Every price feature uses trading days before t, the USD 5 floor uses
+the raw close, and returns start the day after t.
+
+Filers file close to the deadline: `r pct(share_at(30))` of original reports are usable
+within 30 days of quarter end, `r pct(share_at(45))` within 45 and `r pct(share_at(60))`
+within 60. Formations at the end of February, May, August and November fall about two
+weeks after the deadlines, so most reports of the quarter are in; the rest wait for the
+next formation.
+
+```{r audit}
+knitr::kable(data.frame(
+  Check = c(
+    "EDGAR index pages read", "Bulk filing date equals EDGAR filing date",
+    "Accepted before the usable date", "Public before the close of the usable date"
+  ),
+  Result = c(
+    paste0(nrow(audit), " of ", nrow(tb$audit)), pct(mean(audit$same_filing_date)),
+    pct(mean(audit$usable_after_acceptance)), pct(mean(audit$public_before_trade))
+  )
+), col.names = c(paste("Audit of", nrow(tb$audit), "random filings against EDGAR"), "Result"))
+```
+
+`r audit_exception` The pipeline stops if any sampled filing was accepted after the
+close of its usable date or its page cannot be read.
 
 # Results
 
@@ -92,10 +233,16 @@ show <- data.frame(
     "F1 within momentum terciles", "F1, terminal stress",
     "F1 net, 25 bps + 100 bps borrow", "Momentum (reference)"
   ),
-  rbind(cs, ew, rp, ds, stress, cs_net, mom)[, c("ann_return", "ann_alpha", "alpha_t")]
+  rbind(cs, ew, rp, ds, stress, cs_net, mom)[, "ann_return", drop = FALSE]
 )
+rows <- rbind(cs, ew, rp, ds, stress, cs_net, mom)
+capm <- tb$capm[match(rows$series, tb$capm$series), ]
+show$capm <- capm$capm_alpha
+show$capm_t <- capm$capm_t
+show$ff6 <- rows$ann_alpha
+show$ff6_t <- rows$alpha_t
 show$CI <- c(ci(cs), ci(ew), ci(rp), ci(ds), ci(stress), ci(cs_net), ci(mom))
-names(show) <- c("Spread", "Mean, % a year", "FF6 alpha", "t", "95% CI")
+names(show) <- c("Spread", "Mean, % a year", "CAPM alpha", "t", "FF6 alpha", "t", "95% CI of FF6 alpha")
 knitr::kable(show, digits = 2, row.names = FALSE)
 ```
 
@@ -104,21 +251,40 @@ knitr::kable(show, digits = 2, row.names = FALSE)
    The mean rank IC is `r f(ic$mean_ic, 3)` (t = `r f(ic$t_ic)`). Returns are flat from
    the first to the fourth quintile and rise only at the fifth; the monotonicity test
    does not reject a flat relation (p = `r f(mono$p_value[mono$method == "cs"])`).
-2. **Economic viability: not viable.** Net of 25 bps and 100 bps borrow, the cs spread
-   earns `r f(cs_net$ann_return)`% a year and the other weightings earn less. F1 changes
-   almost completely each quarter (rank autocorrelation `r f(mean(pers$rank_autocorrelation))`),
-   so each leg trades its full value at every rebalance; the break-even fee is
-   `r f(inf_cs$breakeven_bps, 0)` bps.
-3. **Incremental to momentum: not shown.** F1 earns a positive spread in every momentum
-   tercile, averaging `r f(ds$ann_return)`% a year, but the interval includes zero.
+2. **Economic viability: viable on the point estimate under cs only, with a wide
+   interval.** Net of a 25 bps fee and 100 bps borrow, the cs spread earns
+   `r f(u_net$ann_return)`% a year, 95% interval [`r f(u_net$ann_return_lo)`,
+   `r f(u_net$ann_return_hi)`]. The pre-registered rule calls a positive net return
+   viable, with its interval reported; the interval includes zero, and under ew and rp
+   the same spread earns `r f(ew_net$ann_return)`% and `r f(rp_net$ann_return)`%. The
+   break-even fee is `r f(inf_cs$breakeven_bps, 0)` bps per dollar traded.
+3. **Incremental to momentum: positive in direction, not significant.** Within each
+   momentum tercile, F1 still earns a positive spread, `r f(ds$ann_return)`% a year on
+   average with the highest Sharpe ratio in the table above (`r f(ds$sharpe)`), but its
+   alpha
+   interval `r ci(ds)` includes zero, so the pre-registered verdict is "not shown".
 
 The weighting hurdle is not met: the spread is positive under all three schemes but no
-alpha is significant.
+FF6 alpha is significant. Against the market alone, the ew spread has a CAPM alpha with
+t = `r f(tb$capm$capm_t[tb$capm$series == ew$series])`; the other five factors absorb
+most of it.
+
+All alphas are estimated on `r u_gross$n_alpha_months` months, because the Fama-French
+data end in September 2026, while the means use all `r months` months. The month left
+out, October 2026, was the worst of the sample: the cs F1 spread lost
+`r f(-tb$spreads$gross_return[tb$spreads$signal == key & tb$spreads$method == "cs" & tb$spreads$design == "unconditional" & tb$spreads$cost_bps == 0 & tb$spreads$borrow_bps == 0 & tb$spreads$dates == max(tb$spreads$dates)], 1)`%
+and the momentum spread
+`r f(-tb$spreads$gross_return[tb$spreads$signal == "mom_12_1" & tb$spreads$design == "reference" & tb$spreads$cost_bps == 0 & tb$spreads$borrow_bps == 0 & tb$spreads$dates == max(tb$spreads$dates)], 1)`%.
+How the alphas would change with that month included cannot be known until its factor
+data are published. The CAPM alpha removes only the market; the legs have almost equal market
+betas, so it differs from the mean mainly through that missing month, and the gap
+between the CAPM and FF6 alphas shows what the other five factors explain.
 
 ```{r ladder, fig.width = 6.5, fig.height = 2.6, fig.cap = "Annual return of each F1 quintile (1 = lowest breadth change)."}
 ggplot(lad, aes(factor(quantile), ann_return, fill = method)) +
-  geom_col(position = "dodge") +
-  labs(x = "F1 quintile", y = "% a year", fill = "Weights")
+  geom_col(position = position_dodge(width = 0.8), width = 0.75) +
+  scale_fill_manual(values = c(cs = "#0B1F3A", ew = "#127C8A", rp = "#B08D3C")) +
+  labs(x = "F1 quintile", y = "% a year", fill = NULL)
 ```
 
 The extreme quintiles hold more liquid stocks than the middle ones even with equal
@@ -135,22 +301,96 @@ holders each.
 ```{r costs}
 dec <- tb$costs$decomposition
 dec <- dec[dec$signal == key & dec$design == "unconditional" & dec$borrow_bps == 0 & dec$cost_bps %in% c(0, 10, 25, 50), ]
-dec <- dec[order(dec$method, dec$cost_bps), c("method", "cost_bps", "gross", "trading", "net")]
-knitr::kable(dec,
-  digits = 2, row.names = FALSE,
-  col.names = c("Weights", "Fee, bps", "Gross, % a year", "Trading cost", "Net")
-)
+## One row per weighting scheme: gross spread, then the net spread at each fee
+wide <- data.frame(method = c("cs", "ew", "rp"))
+wide$gross <- dec$gross[match(paste(wide$method, 0), paste(dec$method, dec$cost_bps))]
+for (fee in c(10, 25, 50)) {
+  wide[[paste0("net_", fee)]] <- dec$net[match(paste(wide$method, fee), paste(dec$method, dec$cost_bps))]
+}
+knitr::kable(wide, digits = 2, row.names = FALSE, col.names = c(
+  "Weights", "Gross, % a year", "Net at 10 bps", "Net at 25 bps", "Net at 50 bps"
+))
 ```
 
-Costs absorb most of the gross spread because F1 has almost no persistence: the
-rank correlation of F1 between consecutive formations averages
-`r f(mean(pers$rank_autocorrelation))`, so most of each quintile is replaced every
-quarter. Turnover is a property of the signal, not of the rebalancing rule.
+The cost model charges a fee on every dollar traded at a rebalance (10, 25 or 50 bps,
+pre-registered) and a borrow fee of 100 bps a year on the short leg. factoRverse can
+also charge market impact, which grows with an order's size relative to the stock's
+daily dollar volume; it is switched off here because its size depends on the assets
+managed, which this study does not fix. Costs absorb most of the gross spread. Under cs
+weights the bottom leg trades
+`r f(tv$traded_per_rebalance[tv$quantile == 1])` times its value at each rebalance and
+the top leg `r f(tv$traded_per_rebalance[tv$quantile == 5])` times (purchases plus
+sales). F1 has little persistence: its rank correlation between consecutive formations
+averages `r f(mean(pers$rank_autocorrelation))`. A borrow fee of 100 bps a year on the
+short leg costs a further 1 percentage point. A signal averaged over two quarters may
+keep more of each quintile and trade less; that is a hypothesis for the next step, not
+a result. Turnover is high at every rebalance, between `r f(min(tr$traded))`
+and `r f(max(tr$traded))` times a leg's value, drifting down only slightly over the
+sample.
+
+## F1 and momentum
+
+```{r terciles}
+mt <- rbind(ter, ds, mom)
+mt$name <- c(
+  "F1 among past losers", "F1 in the middle tercile", "F1 among past winners",
+  "F1 within terciles, average", "Momentum spread"
+)
+knitr::kable(mt[, c("name", "ann_return", "ann_vol", "sharpe", "ann_alpha", "alpha_t")],
+  digits = 2, row.names = FALSE,
+  col.names = c("Gross spread, cs", "Mean, % a year", "Volatility, %", "Sharpe", "FF6 alpha", "t"))
+```
+
+The double sort holds momentum roughly fixed and asks whether F1 still ranks returns.
+It does, in direction: the F1 spread is positive in every momentum tercile and grows
+with momentum, from `r f(ter$ann_return[1])`% a year among past losers to
+`r f(ter$ann_return[3])`% among past winners. Averaged over the three terciles it has a
+Sharpe ratio of `r f(ds$sharpe)`, above both the unconditional F1 spread
+(`r f(cs$sharpe)`) and the momentum spread (`r f(mom$sharpe)`), and the alpha closest to
+significance of all the tests (t = `r f(ds$alpha_t)`). Rising breadth among stocks that
+have already risen is what the gradual-trend reading of F1 predicts. None of these
+spreads is significant, and the winners tercile is one of three, noticed after seeing
+results, so it is a hypothesis for the next trial rather than a finding.
+
+The unconditional F1 and momentum spreads move together (correlation
+`r f(cmb$correlation)`), yet adding F1 helps a momentum investor: half in each gives a
+Sharpe ratio of `r f(cmb$table$sharpe[3])` against `r f(cmb$table$sharpe[1])` for
+momentum alone, because F1 earns most of momentum's return with less volatility
+(`r f(cmb$table$ann_vol[2], 1)`% against `r f(cmb$table$ann_vol[1], 1)`%). These
+comparisons are descriptive and gross of costs.
+
+## Benchmarks
+
+```{r benchmarks}
+bench_rows <- c("spy", "ew_universe", paste(key, "cs", "unconditional", c("q5", "q1"), sep = "|"))
+bt <- unc[match(bench_rows, unc$series), ]
+bt$name <- c("SPY", "Equal-weight universe", "Top F1 quintile, cs", "Bottom F1 quintile, cs")
+bt$interval <- paste0("[", f(bt$ann_return_lo), ", ", f(bt$ann_return_hi), "]")
+knitr::kable(bt[, c("name", "ann_return", "interval")], digits = 2, row.names = FALSE,
+  col.names = c("Long-only portfolio, gross", "Mean, % a year", "95% interval"))
+```
+
+The spread is a zero-investment portfolio, judged against zero and the factors. The
+long legs are compared with SPY, the default holding of a US equity investor, and with
+an equal-weight portfolio of the same 1,000 stocks: the top quintile earned more than
+both before costs, but the intervals overlap widely.
+
+**Year by year.** The cs spread swings from `r f(min(ly$year_mean), 1)`% in
+`r ly$year[which.min(ly$year_mean)]` to `r f(max(ly$year_mean), 1)`% in
+`r ly$year[which.max(ly$year_mean)]`, and `r sum(ly$year_mean < 0)` of `r nrow(ly)`
+years are negative. Leaving any one year out keeps the mean between
+`r f(min(ly$mean_without))`% and `r f(max(ly$mean_without))`% (`r f(ly$mean_all[1])`%
+with all years): no single year carries the result, though the last three years, all
+strongly positive, contribute a large part of it.
 
 # How to read the result
 
-The test has little power. With `r cs$n_months` months, the smallest effect it could
-detect with 80% power is `r f(inf_cs$mde_ann, 1)`% a year. Momentum, the closest known
+The test has little power. With `r cs$n_months` months of returns
+(`r u_gross$n_alpha_months` in the factor regressions, as the factor data stop one month
+earlier), a true FF6 alpha would have to be about `r f(u_gross$mde_alpha_ann, 1)`% a
+year to be detected four times out of five, and a true mean spread about
+`r f(u_gross$mde_mean_ann, 1)`%; the pre-registered threshold of economic interest was a
+2% alpha. Momentum, the closest known
 anomaly, was itself insignificant in the window: UMD averaged `r f(umd$ann_mean[1])`% a
 year (t = `r f(umd$t_mean[1])`) against `r f(umd$ann_mean[2])`% since 1963. The evidence
 is therefore inconclusive, not a rejection, and it is consistent with Nagel's finding
@@ -166,19 +406,20 @@ knitr::kable(umd[, c("period", "ann_mean", "t_mean", "capm_alpha", "capm_t")],
 # Design choices and deviations
 
 The hypotheses, definitions and decision rules were fixed before any return was
-computed; every later change is dated in the memo's deviation log and the report.
-The main ones:
+computed, in `docs/factor_memo_draft.md` (hypothesis in its Section 3, decision rules
+in Section 8); every later change is dated in that document's Deviations section. The
+main ones:
 
-- **Identity at t (D2).** A CUSIP is accepted only if most holders report a value per
+- **Identity at t.** A CUSIP is accepted only if most holders report a value per
   share close to Tiingo's close at quarter end, recomputed at each formation.
-- **Suspected CUSIP changes (D9).** A stock where more than half of at least 20 holders
+- **Suspected CUSIP changes.** A stock where more than half of at least 20 holders
   are new is excluded for that formation: corporate actions that move holders to a new
   CUSIP otherwise look like mass initiations.
-- **Denominator (D10).** F1 divides by the matched cohort rather than all funds; ranks
+- **Denominator.** F1 divides by the matched cohort rather than all funds; ranks
   within a formation are identical.
-- **Traded-day presence (D11).** The universe requires trading on 90% of the previous 63
-  days, after a stock priced at a frozen level with zero volume after a takeover
-  entered the universe.
+- **Traded-day presence.** The universe requires trading on 90% of the previous 63
+  days, so that a stock whose vendor price stays frozen after a takeover, delisting or
+  halt cannot enter it.
 - **Short-leg weighting.** Under cs the bottom quintile is weighted by conviction in
   the short direction (negated F1 times liquidity).
 
@@ -186,23 +427,34 @@ The main ones:
 
 The project is an R package with a `targets` pipeline: `renv::restore()` then
 `targets::tar_make()` rebuilds every pin, the report and this memo. Each layer pins
-only after its data-quality suite passes; 300 unit tests run on every change and in
-continuous integration on a clean machine. The backtest engine, factoRverse, ships in
+only after its data-quality suite passes; over 300 unit tests run before every commit,
+and continuous integration checks the package on a clean machine. The backtest engine, factoRverse, ships in
 the repository.
 
 # Limitations
 
 Short sample and low power; a structural size tilt in F1; identity from today's
-OpenFIGI and Tiingo mappings (0.45% of 13F value cannot be priced, mostly dead firms);
+OpenFIGI and Tiingo mappings (of 13F dollar value, as measured when the security
+master was built, 71.7% is priced, 24.2% is out of
+scope or unmapped, 3.7% is common stock with no Tiingo price series, and 0.45% is
+removed by the identity checks, mostly dead firms whose ticker was later reused);
 formation up to two weeks after most filings are public; stocks that stop trading
 after formation earn zero until the next formation. The size tilt matters most: F1
 partly ranks stocks by how widely they are held.
 
 # Next steps
 
-F1b (ownership change by value) and F1c (new holders relative to the stock's own
-holders) measure the same idea without the size tilt, each as a separate trial with
-false discovery rate control and a deflated Sharpe ratio. A costs study would test
-smoothing F1 over two quarters, which should raise persistence and cut turnover.
-Leave-one-year-out and sector checks would test whether the top-quintile premium is
-concentrated in a few episodes.
+In priority order:
+
+1. **F1b and F1c.** The ownership change by value and the number of new holders
+   relative to the stock's own holders measure the same idea without the size tilt of F1,
+   the main weakness of the current test. Each is a separate trial, with false discovery
+   rate control across the three signals and a Sharpe ratio deflated for the number of
+   trials.
+2. **F1 among past winners.** The strongest pattern in the results is the F1 spread
+   within the high-momentum tercile. Tested as a pre-registered conditional strategy,
+   counted as a new trial, with sector checks, it would show
+   whether rising breadth confirms a price trend or the pattern is noise.
+3. **Costs.** Turnover decides whether any version is tradable. A smoothed F1 (two
+   quarters), factoRverse's market impact model by strategy size, and realistic borrow
+   fees would show the cost a real portfolio would pay.

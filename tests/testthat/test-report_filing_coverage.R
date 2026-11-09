@@ -4,6 +4,8 @@ test_that("filings, filers, amendments and the 45-day share are counted per quar
   expect_equal(out$n_filings, c(3, 2))
   expect_equal(out$n_filers, c(3, 2))
   expect_equal(out$n_amendments, c(0, 1))
+  ## Only original reports count; the blank flag counts as not declared
+  expect_equal(out$n_confidential, c(1, 0))
   ## March: 40 and 46 days are usable by day 45 only for the first; June: 46 and 45 days
   expect_equal(out$share_by_day_45, c(1 / 3, 1 / 2))
 })
